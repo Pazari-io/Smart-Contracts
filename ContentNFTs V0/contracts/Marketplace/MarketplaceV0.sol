@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 import "../Dependencies/Counters.sol";
 import "../Dependencies/IERC1155.sol";
-import "../Dependencies/IERC721.sol";
-import "../Dependencies/IERC20.sol";
 import "../Dependencies/ReentrancyGuard.sol";
 
 contract MarketplaceV0 is ReentrancyGuard {
@@ -43,6 +41,11 @@ contract MarketplaceV0 is ReentrancyGuard {
          uint amount,
          address owner
          );
+
+    /**
+     * Add events for:
+     * - Creator changes price of an item
+     */
      
     
     /**
@@ -72,8 +75,19 @@ contract MarketplaceV0 is ReentrancyGuard {
         uint256 tokenID,
         uint256 price,
         uint256 amount
-        ) public payable {
+        ) external payable {
             require(price > 0, "Price must be greater than 0");
+            require(IERC1155(nftContract).balanceOf(msg.sender, tokenID) >= amount, "Insufficient tokens");
+            /**
+             * Front-end: Require that nftContract, tokenID, price, and amount
+             * are all valid inputs before calling this function. Using
+             * require statements consumes gas, so I'm leaving only this one
+             * so users can't upload free content. If a creator wants to host
+             * free content, then they can set their price to 1 wei, but there
+             * is no stopping a user from buying more than one token. I can
+             * write a free content function that checks for token ownership,
+             * if we want to include this feature.
+             */
 
             // Increases _itemIDs by 1, stores current value as itemID
             _itemIDs.increment();
@@ -102,21 +116,6 @@ contract MarketplaceV0 is ReentrancyGuard {
             );
         }
 
-    //CREATE FUNCTION FOR REMOVING ITEM FOR SALE
-
-    /**
-     * NOTE: Design a token swapper contract that automatically
-     * calls Pangolin / Trader Joe DEX and converts buyer's
-     * tokens into AVAX before submitting this transaction.
-     * This auto-swap feature should be optional, since it will
-     * carry much heavier gas fees that could cost around $1.00.
-     * 
-     * Same token-swapper should be able to work in reverse,
-     * where it takes AVAX as input and outputs any arbitrary
-     * token. This will work in conjunction with our payment
-     * splitter to provide better UX.
-     */
-
     /**
      * @dev Purchases market item itemID
      * 
@@ -136,6 +135,7 @@ contract MarketplaceV0 is ReentrancyGuard {
             require(amount != 0, "Item sold out");
             require(_amount <= amount, "Insufficient tokens for sale");
             require(msg.value == price * _amount, "Insufficient funds");
+            require(IERC1155(nftContract).balanceOf(seller, tokenID) >= amount, "Seller doesn't have enough tokens");
 
             // EFFECTS
             emit MarketItemSold(tokenID, _amount, msg.sender);
@@ -159,6 +159,18 @@ contract MarketplaceV0 is ReentrancyGuard {
         }        
 
     /**
+     * @dev Removes an item from the market
+     */
+    function removeMarketItem(uint256 tokenID, uint256 amount) external returns (bool) {
+        require(idToMarketItem[tokenID].seller == msg.sender, "Only seller can cancel");
+        require(amount <= idToMarketItem[tokenID].amount, "Underflow error");
+
+        // Remove amount of items for sale by reducing available amount
+        idToMarketItem[tokenID].amount -= amount;
+        return true;
+    }
+
+    /**
      * @dev Returns an array of all items for sale on marketplace
      *
      * note This is from the clone OpenSea tutorial, but I modified it to be
@@ -174,7 +186,7 @@ contract MarketplaceV0 is ReentrancyGuard {
         MarketItem[] memory items = new MarketItem[](unsoldItemCount);
 
         // Loop that populates the items[] array 
-        // note We begin counting at 1 because item IDs start at 1
+        // note We begin counting at 1 because item IDs in this contract start at 1
         for (uint i = 1; i <= itemCount; i++) {
             if (idToMarketItem[i].amount > 0) { // All unsold items have amount > 0
                 MarketItem memory unsoldItem = idToMarketItem[i]; // Store MarketItem as unsoldItem
