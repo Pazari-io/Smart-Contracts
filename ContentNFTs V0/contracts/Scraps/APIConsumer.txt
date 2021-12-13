@@ -1,0 +1,115 @@
+/**
+ * @dev If we are using IPFS to store encrypted files and then handing the dapp
+ * the decryption key when a token ownership test is passed, then Chainlink is
+ * not necessary.
+ *
+ * However, we may need to use Chainlink as part of our creator verification
+ * process, which may involve the creator uploading a signature of some kind
+ * to social media accounts and signing with their wallet. We may want to
+ * explore using ERC712 for this purpose after hackathon is done.
+ * 
+ */
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.7;
+
+import "../Dependencies/IERC721.sol";
+import "../Dependencies/IERC1155.sol";
+import "../../../../../node_modules/chainlink/contracts/ChainlinkClient.sol";
+
+contract APIConsumer is ChainlinkClient {
+    using Chainlink for Chainlink.Request;
+
+    bytes32 public privateUrl;
+    address private oracle;
+    bytes32 private jobId;
+    uint256 private fee;
+
+
+    constructor() {
+        setPublicChainlinkToken();
+        oracle = 0xc57B33452b4F7BB189bB5AfaE9cc4aBa1f7a4FD8;
+        jobId = "d5270d1c311941d0b08bead21fea7747";
+        fee = 0.1 * LINK; // (Varies by network and job)
+    }
+
+    // May need a _setFee(PARAMS) internal function to determine job fee;
+
+    /**
+    * @dev Initiates call to Chainlink node to retrieve URL, must pass through
+    * check requiring that user owns NFT. Dapp will provide the tokenType,
+    * tokenID, and tokenContract inputs.
+    * @param tokenID Represents tokenID within the token's contract;
+    * @param tokenContract Address of contract for token being checked;
+    */
+    function getTokenURL(uint256 tokenID, address tokenContract) public returns (string memory) {
+        string memory errorMessage = "Token not found";
+        require(IERC1155(tokenContract).balanceOf(msg.sender, tokenID) >= 1, errorMessage);
+        
+        _requestPrivateUrl();
+    }
+
+    // Changed to internal function;
+    /**
+    * Current setup will return a single URL leading to a page on our
+    * server that will check user's wallet and populate a list showing all
+    * NFT ebooks owned, which can then access the content.
+    *
+    * For PoC, we just need to access the contents of a PDF or similar file on
+    * the other side of the privateUrl. A more secure way to do this might
+    * involve a mapping of privateUrls to each tokenID, and each one leads to a
+    * page with JS scripting to check for ownership of the appropriate token.
+    * 
+    * Another idea is to direct Chainlink to an API which provides a temporary
+    * URL to the particular token being accessed.
+    */ 
+    function _requestPrivateUrl(/*uint256 tokenID*/) internal returns (bytes32 requestId) 
+    {
+        // fee = _setFee(PARAMS) * LINK
+        Chainlink.Request memory request = buildChainlinkRequest(jobId, address(this), this.fulfill.selector);
+
+        // Get information from this URL:
+        request.add("get", "https://2de5-223-24-186-70.ngrok.io/?address=0xlolol%22");
+
+
+        request.add("path", "PrivateUrl");
+                int timesAmount = 1018;
+        request.addInt("times", timesAmount);
+
+        return sendChainlinkRequestTo(oracle, request, fee);
+    }
+
+    // Event emitted when Chainlink node has responded with privateUrl;
+    // Dapp will listen for this event and go to the URL provided;
+    event privateUrlProvided(bytes32 privateUrl);
+    
+    /*
+    * Is this called by a Chainlink node? If so, should _privateUrl be a string?
+    * Also, _privateUrl will be logged on-chain, so this either needs to be
+    * encoded by Chainlink and then decoded off-chain, or the privateUrl needs 
+    * to change every time it is given by Chainlink. Or we need another layer
+    * of redundancy to prevent hacking.
+    *
+    * If _privateUrl points to a page on our server that redirects the user to
+    * a temporary URL, then shouldn't we just store the _privateUrl inside the
+    * token's URI and just use JS scripting to filter out users who don't own
+    * any ebook NFTs?
+    */
+    function fulfill(bytes32 _requestId, bytes32 _privateUrl) public recordChainlinkFulfillment(_requestId)
+    {
+        privateUrl = _privateUrl;
+        emit privateUrlProvided(privateUrl);
+    }
+
+    // Returns the private URL and erases it from contract;
+    function getPrivateUrl() public returns (bytes32) {
+        bytes32 _privateUrl = privateUrl;
+        privateUrl = 0x0;
+        return _privateUrl;
+    }
+
+}
+
+
+
