@@ -1,3 +1,7 @@
+/**
+ * Marketplace Version 0.1.1
+ */
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -16,7 +20,6 @@ contract MarketplaceV0 is ReentrancyGuard {
          address nftContract;
          uint256 tokenID;
          address payable seller;
-         address payable owner;
          uint256 price;
          uint256 amount;
      }
@@ -30,7 +33,6 @@ contract MarketplaceV0 is ReentrancyGuard {
         address indexed nftContract,
         uint256 indexed tokenID,
         address seller,
-        address owner,
         uint256 price,
         uint256 amount
      );
@@ -41,13 +43,7 @@ contract MarketplaceV0 is ReentrancyGuard {
          uint amount,
          address owner
          );
-
-    /**
-     * Add events for:
-     * - Creator changes price of an item
-     */
-     
-    
+         
     /**
      * @dev Creates a MarketItem struct and assigns it an itemID (V0)
      * 
@@ -58,16 +54,15 @@ contract MarketplaceV0 is ReentrancyGuard {
      *
      * note Front-end must call IERC1155.setApprovalForAll(marketAddress, true) before calling
      * this function. The user has to give permission for the marketplace to handle their
-     * tokens before this function will pass. I will modify the token contract to auto-approve
-     * the market's address so this will not be necessary once implemented.
+     * tokens before this function will pass. This will not be necessary once the token contract
+     * is in V0.1.0, but for now we have to use a standard ERC1155 contract. The reason for this
+     * is because our platform is non-custodial.
      *
-     * note When payment splitter is implemented this function will need to be reworked so that
-     * instead of the seller's address it will be passed an ID or a hash telling the payment
-     * splitter which path to take when it receives the value. The front-end will grab this
-     * parameter from a mapping in the marketplace contract. For MVP, the payment splitter will
-     * split payments three ways: One for the seller, one for the creator, and one for the treasury.
-     * In next version we can offer a payment splitter clone for creators that will allow them to
-     * further split their payment among any other creators who contributed to their content.
+     * note For now, all items are priced in AVAX. In V0.2.0 I will introduce tokens, where the
+     * createMarketItem() function will take the token's address as a parameter, and MarketItem
+     * struct will store this address. buyMarketItem() function will automatically check balances
+     * and perform the trade. Users will still be responsible for swapping their own tokens though,
+     * unless if front-end implements a token swapping mechanism to do this automatically.
      */
     
     function createMarketItem(
@@ -99,7 +94,6 @@ contract MarketplaceV0 is ReentrancyGuard {
                 nftContract,
                 tokenID,
                 payable(msg.sender),
-                payable(address(0)),
                 price,
                 amount
             );
@@ -110,7 +104,6 @@ contract MarketplaceV0 is ReentrancyGuard {
                 nftContract,
                 tokenID,
                 msg.sender,
-                address(0),
                 amount,
                 price
             );
@@ -132,17 +125,19 @@ contract MarketplaceV0 is ReentrancyGuard {
             uint amount = idToMarketItem[_itemID].amount;
 
             // CHECKS:
-            require(amount != 0, "Item sold out");
-            require(_amount <= amount, "Insufficient tokens for sale");
-            require(msg.value == price * _amount, "Insufficient funds");
+            require(amount != 0, "Item sold out"); // Item isn't sold out or removed
+            require(_amount <= amount, "Insufficient tokens for sale"); // Buyer isn't buying more tokens than for sale
+            require(msg.value == price * _amount, "Insufficient funds"); // Buyer has enough AVAX to buy
+            // Seller has enough tokens in wallet to sell
             require(IERC1155(nftContract).balanceOf(seller, tokenID) >= amount, "Seller doesn't have enough tokens");
 
             // EFFECTS
+            // Event: MarketItemSold returns tokenID, amount purchased, and the buyer's address
             emit MarketItemSold(tokenID, _amount, msg.sender);
-            idToMarketItem[_itemID].owner = payable(msg.sender);
-            _itemsSoldOut.increment();
-            if(_amount <= amount){
-                idToMarketItem[_itemID].amount -= _amount;
+            idToMarketItem[_itemID].amount -= _amount; // Subtracts amount bought from amount for sale
+
+            if(_amount == amount){ // If buy order clears all available stock, then:
+                _itemsSoldOut.increment(); // Increment counter variable for items sold out
             }
 
             //INTERACTIONS
@@ -198,6 +193,3 @@ contract MarketplaceV0 is ReentrancyGuard {
     }
       
 }
-
-
-
