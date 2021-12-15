@@ -1,0 +1,778 @@
+/**
+ * WHEN IT IS TIME TO OPTIMIZE FOR GAS, USE THIS ARTICLE FOR IDEAS:
+ * https://medium.com/@novablitz/storing-structs-is-costing-you-gas-774da988895e
+ *
+ * EXPERIMENT WITH THE FOLLOWING FOR GAS EFFICIENCY
+ *
+ * toggleTrading():
+ * See if the require() statement consumes gas when it *passes*, and how much.
+ * Should this logic be handled by dapp instead?
+ *
+ */
+
+
+/**
+ * @dev Modification of the standard ERC1155 token contract for the
+ * application of monetizable privacy NFTs. These are NFTs that hold content
+ * which is meant to be hidden behind a pay-wall, and can only be viewed by
+ * holders of the NFT. Creators of these NFTs have enhanced features that 
+ * grant extra control over how these NFTs behave.
+ *
+ * The following features are enabled in this contract:
+ * 
+ * - Creators control whether a token is tradable on secondary markets.
+ * 
+ * - Creators control whether a token has unlimited or capped supply.
+ *
+ * - Creators control whether a token's content is mutable or immutable.
+ *
+ * - Creators can change the royalty percentage of any token.
+ *
+ * - Creators can assign different addresses for royalty payments.
+ *
+ *
+ * IDEAS for future versions:
+ *
+ * - Implement AccessControlEnumerable.sol to enable complex access control
+ * systems for entities with more than one creator.
+ * 
+ * - Break apart many of the functions into a second contract that inherits
+ * from this one. Adapt the second contract to be optional for the creator
+ * to choose when they create their contract. If they don't use the optional
+ * contract then there will be no ability for creator to change tokens'
+ * capabilities, such as burning, trading, and minting.
+ */
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "../Dependencies/IERC1155.sol";
+import "../Dependencies/IERC1155Receiver.sol";
+import "../Dependencies/IERC1155MetadataURI.sol";
+import "../Dependencies/Address.sol";
+import "../Dependencies/Context.sol";
+import "../Dependencies/ERC165.sol";
+import "../Dependencies/Ownable.sol";
+
+contract PrivateNFTs is Context, ERC165, IERC1155, IERC1155MetadataURI, Ownable {
+    using Address for address;
+
+    // Mapping from token ID to account balances
+    mapping (uint256 => mapping(address => uint256)) private _balances;
+
+    // Mapping from account to operator approvals
+    mapping (address => mapping(address => bool)) private _operatorApprovals;
+
+    // Mapping from token ID to metadata's IPFS URI;
+    mapping(uint256 => string) private _uri;
+
+    // Mapping from token ID to Token struct;
+    mapping(uint256 => Token) tokenID;
+
+    uint256 private tokenIDCounter;
+
+    /**
+     * @dev Struct to track logic variables. 
+     * Keep this struct as minimalistic as possible and optimize for gas usage.
+     *
+     * Using uint8 for royaltyPerc since it represents a percentage number that 
+     * cannot be higher than 100.
+     *
+     * Ideally, all of the bools and the uint8 should occupy the same storage slot
+     * in the EVM, thus saving gas when a new Token is created.
+     */
+    struct Token {
+        address payable royalAddr; // Address where royalties are sent, can be a contract;
+        bool isMintable; // Token can be minted;
+        bool isBurnable; // Token can be burned;
+        bool isTradable; // Token can be traded;
+        bool isMutable; // Token URI can be updated;
+        uint8 royaltyPerc; // Percent of sale that goes back to author, royalty < 100;
+    }
+
+    constructor () {
+        super;
+        address payable creator = owner();
+    }
+
+    /**
+     * @dev checks if token _tokenID is mutable or not:
+     * True = Content can be changed via setURI()
+     * False = Content cannot be changed via setURI()
+     */
+     
+    modifier _isMutable(uint256 _tokenID) {
+        require(tokenID[_tokenID].isMutable, "Token is immutable");
+        _;
+    }
+
+    /**
+     * @dev Checks if token _tokenID is mintable or not:
+     * True = Standard Edition, can be minted by creator
+     * False = Limited Edition, cannot be minted by anyone
+     */
+    modifier _isMintable(uint256 _tokenID) {
+        require(tokenID[_tokenID].isMintable, "Minting disabled");
+        _;
+    }
+
+    /**
+     * @dev Checks if token _tokenID is tradable or not:
+     * True = Token can be transferred after purchase.
+     * False = Token cannot be transferred after purchase.
+     */
+    modifier _isTradable(address _from, uint256 _tokenID) {
+        if(_from != creator){
+            require(tokenID[_tokenID].isTradable, "Trading disabled");
+        }
+        else _;
+    }
+
+    /**
+     * @dev Checks if user owns token _tokenID.
+     *
+     * Modifier and function are included for this functionality. Dapp can call the ownsToken()
+     * function to verify that a user owns a particular token before it proceeds to retrieve,
+     * decrypt, and display the content.
+     */
+    modifier _ownsToken(uint256 _tokenID, address _owner) {
+        require(balanceOf(_owner, _tokenID) != 0, "User doesn't own token");
+        _;
+    }
+
+    function ownsToken(uint256 _tokenID, address _owner) public view returns (bool hasToken) {
+        if (balanceOf(msg.sender, _tokenID) != 0) {
+            hasToken = true;
+        }
+    }
+
+    /**
+     * @dev Function to toggle secondary trading for token _tokenID
+     * isTradable == true: Token can be transferred after purchased 
+     * isTradable == false: Token cannot be transferred after purchased
+     */
+    function toggleTrading(uint256 _tokenID, bool _isTradable) external onlyOwner {
+        tokenID[_tokenID].isTradable = _isTradable;
+    }    
+
+    function adjustRoyalty(uint256 _tokenID, uint8 _royaltyPerc) external onlyOwner {
+        tokenID[_tokenID].royaltyPerc = _royaltyPerc;
+    }
+
+    /**
+     * @dev See {IERC165-supportsInterface}.
+     */
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC165, IERC165) returns (bool) {
+        return interfaceId == type(IERC1155).interfaceId
+            || interfaceId == type(IERC1155MetadataURI).interfaceId
+            || super.supportsInterface(interfaceId);
+    }
+
+    /**
+     * @dev This implementation returns the URI stored for any _tokenID,
+     * overwrites ERC1155's uri() function while maintaining compatibility
+     * with OpenSea's standards.
+     */
+    function uri(uint256 _tokenID) public view virtual override returns (string memory) {
+        return _uri[_tokenID];
+    }
+
+    /**
+     * @dev See {IERC1155-balanceOf}.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     */
+    function balanceOf(address account, uint256 id) public view virtual override returns (uint256) {
+        require(account != address(0), "ERC1155: balance query for the zero address");
+        return _balances[id][account];
+    }
+
+    /**
+     * @dev See {IERC1155-balanceOfBatch}.
+     *
+     * Requirements:
+     *
+     * - `accounts` and `ids` must have the same length.
+     */
+    function balanceOfBatch(
+        address[] memory accounts,
+        uint256[] memory ids
+    )
+        public
+        view
+        virtual
+        override
+        returns (uint256[] memory)
+    {
+        require(accounts.length == ids.length, "ERC1155: accounts and ids length mismatch");
+
+        uint256[] memory batchBalances = new uint256[](accounts.length);
+
+        for (uint256 i = 0; i < accounts.length; ++i) {
+            batchBalances[i] = balanceOf(accounts[i], ids[i]);
+        }
+
+        return batchBalances;
+    }
+
+    /**
+     * @dev See {IERC1155-setApprovalForAll}.
+     */
+    function setApprovalForAll(address operator, bool approved) public virtual override {
+        require(_msgSender() != operator, "ERC1155: setting approval status for self");
+
+        _operatorApprovals[_msgSender()][operator] = approved;
+        emit ApprovalForAll(_msgSender(), operator, approved);
+    }
+
+    /**
+     * @dev See {IERC1155-isApprovedForAll}.
+     */
+    function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
+        return _operatorApprovals[account][operator];
+    }
+
+
+    /**
+     * @dev See {IERC1155-safeTransferFrom}.
+     *
+     * @dev PHOENIX: Added _isTradable(id) modifier to check if the book being
+     * transferred is actually tradable, and if not then transaction will revert.
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    )
+        public
+        virtual
+        override
+        _isTradable(id)
+    {
+        require(
+            from == _msgSender() || isApprovedForAll(from, _msgSender()),
+            "ERC1155: caller is not creator nor approved"
+        );
+        _safeTransferFrom(from, to, id, amount, data);
+    }
+
+    /**
+     * @dev See {IERC1155-safeBatchTransferFrom}.
+     *
+     * @dev PHOENIX: Added _isTradable(id) modifier to check if the book being
+     * transferred is actually tradable, and if not then the transaction will revert.
+     */
+    function safeBatchTransferFrom(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    )
+        public
+        virtual
+        override
+        _isTradable(id)
+    {
+        require(
+            from == _msgSender() || isApprovedForAll(from, _msgSender()),
+            "ERC1155: transfer caller is not creator nor approved"
+        );
+        _safeBatchTransferFrom(from, to, ids, amounts, data);
+    }
+
+    /**
+     * @dev Transfers `amount` tokens of token type `id` from `from` to `to`.
+     *
+     * Emits a {TransferSingle} event.
+     *
+     * Requirements:
+     *
+     * - `to` cannot be the zero address.
+     * - `from` must have a balance of tokens of type `id` of at least `amount`.
+     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
+     * acceptance magic value.
+     */
+    function _safeTransferFrom(
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    )
+        internal
+        virtual
+    {
+        require(to != address(0), "ERC1155: transfer to the zero address");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, from, to, _asSingletonArray(id), _asSingletonArray(amount), data);
+
+        uint256 fromBalance = _balances[id][from];
+        require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
+        _balances[id][from] = fromBalance - amount;
+        _balances[id][to] += amount;
+
+        emit TransferSingle(operator, from, to, id, amount);
+
+        _doSafeTransferAcceptanceCheck(operator, from, to, id, amount, data);
+    }
+
+    /**
+     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_safeTransferFrom}.
+     *
+     * Emits a {TransferBatch} event.
+     *
+     * Requirements:
+     *
+     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
+     * acceptance magic value.
+     */
+    function _safeBatchTransferFrom(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    )
+        internal
+        virtual
+    {
+        require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
+        require(to != address(0), "ERC1155: transfer to the zero address");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, from, to, ids, amounts, data);
+
+        for (uint256 i = 0; i < ids.length; ++i) {
+            uint256 id = ids[i];
+            uint256 amount = amounts[i];
+
+            uint256 fromBalance = _balances[id][from];
+            require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
+            _balances[id][from] = fromBalance - amount;
+            _balances[id][to] += amount;
+        }
+
+        emit TransferBatch(operator, from, to, ids, amounts);
+
+        _doSafeBatchTransferAcceptanceCheck(operator, from, to, ids, amounts, data);
+    }
+
+    /**
+     * @dev Sets a new URI for each _tokenID metadata. Overwrites ERC1155's _setURI()
+     * function to implement mapping each token's ID to a unique IPFS URI. This
+     * URI links to the JSON metadata file, which in turn holds the location of the
+     * encrypted content.
+     *
+     * _setURI checks that the URI passed to it isn't an empty string.
+     *
+     * Mutable tokens can have their content updated, but this also means the token
+     * can be broken as well if a URI to an empty page is provided. This function
+     * will prevent submission of an empty string, but it won't stop an attacker
+     * from breaking the content.
+     *
+     * GAS OPTIMIZATION IDEA:
+     * Try storing all URIs as bytes32, then using BytesToString contract to
+     * convert from bytes back to string again when calling uri(). Since uri()
+     * is view only, this operation should cost no gas to perform, and since
+     * bytes32 require less space than strings the _setURI() function should
+     * take less gas to run as well.
+     */
+
+    // External function runs access control checks;
+    function setURI(string memory newURI, uint256 _tokenID) external onlyOwner _isMutable {
+        _setURI(newURI, _tokenID);
+    }
+
+    // Internal function updates URI and checks that the mapping isn't empty;
+    function _setURI(string memory newuri, uint256 _tokenID) internal virtual {
+        bytes memory tempInput = bytes(newuri);
+        require(tempInput.length != 0, "Provided URI is empty");
+        
+        _uri[_tokenID] = newuri;
+
+        bytes memory tempOutput = bytes(_uri[_tokenID]);
+        assert(tempOutput.length != 0); //Double-check that the mapping updated;
+    }
+
+    /**
+     * @dev Creates and mints a new privacy NFT.
+     * @param _newURI IPFS URI of NFT's public metadata
+     * @param _royalty % of each sale that is sent back to creator
+     * @param _isTradable True = The Token can be transferred/sold, False = The Token cannot be transferred/sold
+     * @param _isMintable True = More tokens can be minted, false = No more tokens can be minted
+     * @param _amount Amount of tokens to be minted at creation
+     *
+     * If creator provides _isMintable == false, then tokens will begin with
+     * capped supply and a disabled mint function. Useful for limited edition items.
+     *
+     */
+    function createToken(
+         string memory _newURI,
+         address _royaltyAddr, 
+         uint8 _royaltyPerc, 
+         bool _isTradable, 
+         bool _isMintable,
+         bool _isMutable,
+         uint256 _amount)
+         external
+         onlyOwner
+         returns (bool) {
+             _createToken(_newURI, _royaltyAddr, _royaltyPerc, _isTradable, _isMintable, _isMutable, _amount);
+         }
+
+     function _createToken(
+         string memory _newURI,
+         address _royaltyAddr, 
+         uint8 _royaltyPerc, 
+         bool _isTradable, 
+         bool _isMintable,
+         bool _isMutable,
+         uint256 _amount)
+         internal
+         returns (bool) {
+            require(_amount > 0, "Cannot mint 0");
+            require(_royalty <= 100, "Cannot take more than 100%"); // Should we reduce this value?
+
+            Token memory newToken = new Token(
+                _royaltyAddr, 
+                _isMintable, 
+                _isBurnable,
+                _isTradable,
+                _isMutable, 
+                _royaltyPerc);
+            tokenID[tokenIDCounter] = newToken;
+
+            _setURI(_newURI, tokenIDCounter);
+            require(_mint(msg.sender, tokenIDCounter, _amount), "Minting failed");
+
+            tokenIDCounter++;
+            return true;
+         }
+    /**
+     * @dev Use this function for producing either ERC721-style collections of many unique tokens or for
+     * uploading a whole collection of works with varying token amounts. Dapp will handle all the 
+     * heavy lifting for operating this function, though not important for MVP. A "nice-to-have".
+     *
+     * Creators may want to consider deploying a new contract for any kind of ERC721-style collections if
+     * the token ID numbers are important to them. This contract will only track one set of token ID numbers.
+     */
+    function batchCreateTokens(
+         string[] memory _newURIs,
+         address[] _royaltyAddrs, 
+         uint8[] _royaltyPercs, 
+         bool[] _isTradable, 
+         bool[] _isMintable,
+         uint256[] _amounts)
+         external
+         onlyOwner
+         returns (bool) {
+            require(
+                _newURIs.length == _royaltyAddrs && 
+                _royaltyAddrs == _isTradable && 
+                _isTradable == _isMintable &&
+                _isMintable == _amounts, "All data fields must be same length");
+            
+            for (i = 0; i <= _newURIs.length; i++) {
+                string memory newURIs = _newURIs[i];
+                address royaltyAddrs = _royaltyAddrs[i];
+                uint8 royaltyPercs = _royaltyPercs[i];
+                bool isTradable = _isTradable; 
+                bool isMintable = _isMintable;
+                uint256 amounts = _amounts;
+            }
+            
+            return true;
+         }
+
+     /**
+      * @dev Mints more copies of a created token.
+      *
+      * Requires:
+      * -The creator of the contract must call
+      * -The token be flagged as mintable in its on-chain metadata
+      */
+
+    function mintTokens(uint256 _tokenID, uint256 _amount) external onlyOwner _isMintable(_tokenID) returns (bool) {
+        require(_mint(msg.sender, _tokenID, _amount), "Minting failed");
+    }
+
+    function batchMintTokens(uint256[] _tokenIDs, uint256[] _amounts) external onlyOwner _isMintable(_tokenID) returns (bool) {
+        _mintBatch(msg.sender, _tokenIDs, _amounts, "");
+    }
+
+    /**
+     * @dev Permanently removes a book from publication, making it un-mintable.
+     *
+     * THIS SHOULD BE AN OPTIONAL FEATURE TO BE SELECTED WHEN AN AUTHOR CREATES THEIR CONTRACT
+     *
+     * The primary use case of these functions is to make a particular copy of a book a special edition copy after
+     * it has been in circulation. If a particular book becomes very popular, then the author can opt to unpublish
+     * it so its value increases. This function is meant for an author to lock themself out of the mint function,
+     * which removes trust from the scarcity of an NFT ebook.
+     */
+
+     function unpublishToken(uint256 _tokenID) external onlyOwner isMintable(_tokenID) returns (bool) {
+         tokenID[_tokenID].isMintable = false;
+     }
+
+     function batchUnpublishTokens(uint256[] _tokenIDs) external onlyOwner isMintable(_tokenID) returns (bool) {
+         for (uint256 i = 0; i <_tokenIDs.length; i++){
+             tokenID[_tokenIDs[i]].isMintable = false;
+         }
+     }
+
+     /**
+     * @dev Burns copies of a book, permanently removing it from circulation.
+     *
+     * A use case for a burn function is if an author's NFT ebook supply is too high and they want to reduce
+     * the circulating supply. Also provides the option for buying books back in order to burn them, which could
+     * be useful for early edition NFT ebooks that have become valuable over time, or books that were illegally
+     * published and minted on the platform. The dapp can be set up to pay a reader the mint price of a book
+     * that is flagged as pirated, while also not displaying the book in the view window.
+     */
+
+     function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
+         _burn(msg,sender, _tokenID, _amount);
+     }
+
+     function burnBatch(uint256[] _tokenIDs, uint256[] _amounts) external returns (bool) {
+        _burnBatch(msg.sender, _tokenIDs, amounts);
+     }
+
+     /**
+      * @dev Toggles whether a book is tradable by readers or not.
+      *
+      * THIS SHOULD BE OPTIONAL WHEN AUTHOR CREATES CONTRACT
+      * 
+      * I'm including both a single and a batch function, and we can decide if we want to keep the single. Batch
+      * function is convenient for toggling more than one book, but single toggle will likely be less expensive 
+      * than the batch toggle for a single token.
+      *
+      * A use case for batch toggling of trading is if an author isn't comfortable having their books up for trade
+      * 24/7 and want to only allow trading for limited periods of time.
+      */
+
+    function toggleTrading(uint256 _tokenID) external onlyOwner returns (bool) {
+        if(tokenID[_tokenID].isTradable) {
+            tokenID[_tokenID].isTradable = false;
+        }
+        else tokenID[_tokenID].isTradable = true;
+        return true;
+    }
+
+    function batchToggleTrading(uint256[] _tokenIDs) external onlyOwner returns (bool) {
+        for (uint256 i = 0; i < _tokenIDs.length; i++){
+            Token memory selectedToken = tokenID[_tokenIDs[i]];
+            if(selectedToken.isTradable) {
+                selectedToken.isTradable = false;
+            }
+            else selectedToken.isTradable = true;            
+        }
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` tokens of token type `id`, and assigns them to `account`.
+     *
+     * Emits a {TransferSingle} event.
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     * - If `account` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
+     * acceptance magic value.
+     */
+    function _mint(address account, uint256 id, uint256 amount, bytes memory data) internal virtual returns (bool) {
+        require(account != address(0), "ERC1155: mint to the zero address");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, address(0), account, _asSingletonArray(id), _asSingletonArray(amount), data);
+
+        _balances[id][account] += amount;
+        emit TransferSingle(operator, address(0), account, id, amount);
+
+        _doSafeTransferAcceptanceCheck(operator, address(0), account, id, amount, data);
+        return true;
+    }
+
+    /**
+     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_mint}.
+     *
+     * Requirements:
+     *
+     * - `ids` and `amounts` must have the same length.
+     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
+     * acceptance magic value.
+     */
+    function _mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data) internal virtual returns (bool) {
+        require(to != address(0), "ERC1155: mint to the zero address");
+        require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, address(0), to, ids, amounts, data);
+
+        for (uint i = 0; i < ids.length; i++) {
+            _balances[ids[i]][to] += amounts[i];
+        }
+
+        emit TransferBatch(operator, address(0), to, ids, amounts);
+
+        _doSafeBatchTransferAcceptanceCheck(operator, address(0), to, ids, amounts, data);
+        return true;
+    }
+
+    /**
+     * @dev Destroys `amount` tokens of token type `id` from `account`
+     *
+     * Requirements:
+     *
+     * - `account` cannot be the zero address.
+     * - `account` must have at least `amount` tokens of token type `id`.
+     */
+    function _burn(address account, uint256 id, uint256 amount) internal virtual returns (bool) {
+        require(account != address(0), "ERC1155: burn from the zero address");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, account, address(0), _asSingletonArray(id), _asSingletonArray(amount), "");
+
+        uint256 accountBalance = _balances[id][account];
+        require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
+        _balances[id][account] = accountBalance - amount;
+
+        emit TransferSingle(operator, account, address(0), id, amount);
+        return true;
+    }
+
+    /**
+     * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_burn}.
+     *
+     * Requirements:
+     *
+     * - `ids` and `amounts` must have the same length.
+     */
+    function _burnBatch(address account, uint256[] memory ids, uint256[] memory amounts) internal virtual returns (bool) {
+        require(account != address(0), "ERC1155: burn from the zero address");
+        require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
+
+        address operator = _msgSender();
+
+        _beforeTokenTransfer(operator, account, address(0), ids, amounts, "");
+
+        for (uint i = 0; i < ids.length; i++) {
+            uint256 id = ids[i];
+            uint256 amount = amounts[i];
+
+            uint256 accountBalance = _balances[id][account];
+            require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
+            _balances[id][account] = accountBalance - amount;
+        }
+
+        emit TransferBatch(operator, account, address(0), ids, amounts);
+        return true;
+    }
+
+    /**
+     * @dev Hook that is called before any token transfer. This includes minting
+     * and burning, as well as batched variants.
+     *
+     * The same hook is called on both single and batched variants. For single
+     * transfers, the length of the `id` and `amount` arrays will be 1.
+     *
+     * Calling conditions (for each `id` and `amount` pair):
+     *
+     * - When `from` and `to` are both non-zero, `amount` of ``from``'s tokens
+     * of token type `id` will be  transferred to `to`.
+     * - When `from` is zero, `amount` tokens of token type `id` will be minted
+     * for `to`.
+     * - when `to` is zero, `amount` of ``from``'s tokens of token type `id`
+     * will be burned.
+     * - `from` and `to` are never both zero.
+     * - `ids` and `amounts` have the same, non-zero length.
+     *
+     * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
+     */
+    function _beforeTokenTransfer(
+        address operator,
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    )
+        internal
+        virtual
+    { }
+
+    function _doSafeTransferAcceptanceCheck(
+        address operator,
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    )
+        private
+    {
+        if (to.isContract()) {
+            try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
+                if (response != IERC1155Receiver(to).onERC1155Received.selector) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non ERC1155Receiver implementer");
+            }
+        }
+    }
+
+    function _doSafeBatchTransferAcceptanceCheck(
+        address operator,
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    )
+        private
+    {
+        if (to.isContract()) {
+            try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, amounts, data) returns (bytes4 response) {
+                if (response != IERC1155Receiver(to).onERC1155BatchReceived.selector) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non ERC1155Receiver implementer");
+            }
+        }
+    }
+
+    function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
+    }
+}
+
+
+
+
+
+
+
+
