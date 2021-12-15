@@ -6,81 +6,18 @@
  */
 
 const MarketplaceV0 = artifacts.require("MarketplaceV0");
+const ContractFactory1155 = artifacts.require("ContractFactory1155");
 const ERC1155PresetMinterPauser = artifacts.require("ERC1155PresetMinterPauser");
 
 module.exports = async function (deployer, network, accounts) {
   await deployer.deploy(MarketplaceV0);
+  await deployer.deploy(ContractFactory1155);
+  await deployer.deploy(ERC1155PresetMinterPauser);
 
-  let market = await MarketplaceV0.deployed();
-  let token = await ERC1155PresetMinterPauser.deployed();
+  // let market = await MarketplaceV0.deployed();
+  // let token = await ERC1155PresetMinterPauser.deployed();
 
-  let buyer = accounts[1];
 
-  //Function parameters for market.CreateMarketItem():
-  let itemID = 1;
-  let nftContract = token.address;
-  let tokenID = 1; //tokenID and itemId are same
-  let seller = accounts[0];
-  let price = web3.utils.toWei('1');
-  let amountSell = 1;
-
-  //Function parameters for token.mint():
-  let amountMint = 5;
-  let tokenURI = "WEBSITE URL";
-  let data = 0x0;
-
-  //MINT TOKENS
-  console.log("Running mint(seller = accounts[0], tokenID = 1, amountMint = 5, tokenURI = \"WEBSITE URL\", data = \"\")");
-    await token.mint(seller, tokenID, amountMint, tokenURI, data);
-
-  //CHECK INITIAL BALANCES
-  console.log("Running token.balanceOf(accounts[0], tokenID = 1):");
-    console.log(await token.balanceOf(seller, tokenID));
-  console.log("Running token.balanceOf(accounts[1], tokenID = 1):");
-    console.log(await token.balanceOf(buyer, tokenID));
-  console.log("Check AVAX balance of accounts[0] and accounts[1]:");
-    let initialBalance0 = await web3.eth.getBalance(accounts[0]);
-    let initialBalance1 = await web3.eth.getBalance(accounts[1]);
-  console.log("accounts[0] AVAX balance: " + initialBalance0);
-  console.log("accounts[1] AVAX balance: " + initialBalance1);
-
-  //PUT TOKEN FOR SALE
-  console.log("Running createMarketItem(nftContract = token.address, itemID = 1, price = 0.1, amountSell = 1):");
-    await market.createMarketItem(nftContract, itemID, price, amountSell, {from: accounts[0]});
-    initialBalance0 = await web3.eth.getBalance(accounts[0]);
-
-  //FETCH UNSOLD ITEM LIST
-  console.log("Running fetchMarketItems():");
-  console.log(await market.fetchMarketItems());
-
-  //GIVE PERMISSION FOR MARKETPLACE TO HANDLE TOKENS
-  //(This will not be necessary when token contract is ready)
-  console.log("Running IERC1155.setApprovalForAll(market.address, true):")
-    await token.setApprovalForAll(market.address, true);
-
-  //BUY TOKEN
-  console.log("Running buyMarketItem(tokenID = 1, amount = 1, {value: price}):");
-    await market.buyMarketItem(itemID, amountSell, {value: price, from: accounts[1]});
-
-  //FETCH UNSOLD ITEM LIST AGAIN, MAKE SURE IT'S EMPTY
-  console.log("Running fetchMarketItems():");
-    let marketItems = await market.fetchMarketItems();
-    console.log("MarketItems array empty?" + marketItems.length == 0);
-
-  //CHECK BALANCES, MAKE SURE TOKEN AND VALUE TRANSFERRED CORRECTLY
-  console.log("Checking balances:");
-  let finalBalance0 = await web3.eth.getBalance(accounts[0]);
-  let finalBalance1 = await web3.eth.getBalance(accounts[1]);
-  console.log("Balance of seller: " + finalBalance0);
-  console.log("Balance of buyer: " + finalBalance1);
-    let AVAXBalanceCompare0 = initialBalance0 < finalBalance0;
-    let AVAXBalanceCompare1 = initialBalance1 > finalBalance1;
-  console.log("Account[0] initialBalance < finalBalance: " + AVAXBalanceCompare0);
-  console.log("Account[1] initialBalance > finalBalance: " + AVAXBalanceCompare1);
-    let tokenBalance0 = await token.balanceOf(accounts[0], tokenID);
-    let tokenBalance1 = await token.balanceOf(accounts[1], tokenID);
-  console.log("Account[0] token balance: " + tokenBalance0);
-  console.log("Account[1] token balance: " + tokenBalance1);
 
   //DO IT AGAIN, BUT THIS TIME ADD MORE TOKENS TO CREATE A BIGGER LIST
   //Make sure unsold item list updates properly when many, but not all,

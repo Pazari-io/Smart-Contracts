@@ -27,6 +27,10 @@ contract MarketplaceV0 is ReentrancyGuard {
      // Mapping that maps item IDs to their MarketItem structs: itemID => MarketItem
      mapping(uint256 => MarketItem) private idToMarketItem;
 
+     //Mapping from nftContract address to map of tokenIds => itemIds.  
+     //The purpose of this is to prevent duplicate items for same token
+     mapping(address => mapping(uint256 => uint256)) private contractMap;
+
     // Fires when token is put on market;     
      event MarketItemCreated (
         uint indexed itemID,
@@ -73,6 +77,7 @@ contract MarketplaceV0 is ReentrancyGuard {
         ) external payable {
             require(price > 0, "Price must be greater than 0");
             require(IERC1155(nftContract).balanceOf(msg.sender, tokenID) >= amount, "Insufficient tokens");
+            require(contractMap[nftContract][tokenID] == 0, "Shouldn't have an entry for this item");
             /**
              * Front-end: Require that nftContract, tokenID, price, and amount
              * are all valid inputs before calling this function. Using
@@ -97,6 +102,7 @@ contract MarketplaceV0 is ReentrancyGuard {
                 price,
                 amount
             );
+            contractMap[nftContract][tokenID] = itemID;
 
             // Emits MarketItemCreated event
             emit MarketItemCreated(
@@ -130,6 +136,7 @@ contract MarketplaceV0 is ReentrancyGuard {
             require(msg.value == price * _amount, "Insufficient funds"); // Buyer has enough AVAX to buy
             // Seller has enough tokens in wallet to sell
             require(IERC1155(nftContract).balanceOf(seller, tokenID) >= amount, "Seller doesn't have enough tokens");
+            require(msg.sender != seller, "Cannot buy if you are the seller");
 
             // EFFECTS
             // Event: MarketItemSold returns tokenID, amount purchased, and the buyer's address
