@@ -74,7 +74,7 @@ contract MarketplaceV0 is ReentrancyGuard {
         uint256 tokenID,
         uint256 price,
         uint256 amount
-        ) external payable {
+        ) external {
             require(price > 0, "Price must be greater than 0");
             require(IERC1155(nftContract).balanceOf(msg.sender, tokenID) >= amount, "Insufficient tokens");
             require(contractMap[nftContract][tokenID] == 0, "Shouldn't have an entry for this item");
