@@ -20,6 +20,7 @@ dotenvConfig({ path: resolve(__dirname, "./.env") });
 const MNEMONIC_DEFAULT = "test test test test test test test test test test test junk";
 const MNEMONIC_LOCALHOST = process.env.MNEMONIC_LOCALHOST || MNEMONIC_DEFAULT;
 const MNEMONIC_TESTNET = process.env.MNEMONIC_TESTNET || MNEMONIC_DEFAULT;
+const MNEMONIC_MAINNET = process.env.MNEMONIC_MAINNET || "";
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
@@ -29,7 +30,7 @@ const config: HardhatUserConfig = {
       forking: {
         enabled: process.env.FORKING_ENABLED === "true",
         blockNumber: Number(process.env.FORKING_BLOCK_NUM) || undefined,
-        url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/eth/mainnet/archive`,
+        url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/avalanche/mainnet/archive`,
       },
       accounts: {
         mnemonic: MNEMONIC_LOCALHOST,
@@ -48,6 +49,20 @@ const config: HardhatUserConfig = {
         mnemonic: MNEMONIC_TESTNET,
       },
     },
+    fuji: {
+      chainId: 43113,
+      url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/avalanche/testnet`,
+      accounts: {
+        mnemonic: MNEMONIC_TESTNET
+      }
+    },
+    avax: {
+      chainId: 43114,
+      url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/avalanche/mainnet`,
+      accounts: {
+        mnemonic: MNEMONIC_MAINNET
+      }
+    }
   },
   solidity: {
     compilers: [
