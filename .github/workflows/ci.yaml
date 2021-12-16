@@ -16,7 +16,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        working-directory: ./ContentNFTsV0
 
       - name: Set up Node.js version
         uses: actions/setup-node@v1
@@ -27,6 +26,8 @@ jobs:
         run: |
           yarn
           yarn compile
+        working-directory: ./ContentNFTsV0
       - name: Perform unit test
         run: |
           yarn test
+        working-directory: ./ContentNFTsV0
