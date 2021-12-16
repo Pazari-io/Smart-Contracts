@@ -17,12 +17,10 @@ module.exports = async function (deployer, network, accounts) {
   // let market = await MarketplaceV0.deployed();
   // let token = await ERC1155PresetMinterPauser.deployed();
 
-
-
   //DO IT AGAIN, BUT THIS TIME ADD MORE TOKENS TO CREATE A BIGGER LIST
   //Make sure unsold item list updates properly when many, but not all,
   //orders are placed and filled.
-/*
+  /*
   //MINT MULTIPLE TOKENS
   console.log("Minting multiple tokens with IDs 2, 3, 4, 5:")
     await token.mint(seller, 2, 1, tokenURI, data);
