@@ -15,6 +15,11 @@
     "fork": "npx hardhat node",
     "clean": "rm -rf abi artifacts cache types"
   },
+  "husky": {
+    "hooks": {
+      "pre-push": "npm run format:fix"
+    }
+  },
   "author": "",
   "license": "ISC",
   "dependencies": {
