@@ -1,0 +1,10 @@
+**/export
+**/deployments
+**/artifacts
+**/cache
+**/coverage
+**/typechain
+**/dapp_test/test.sol
+**/artifacts
+**/node_modules/
+**/types

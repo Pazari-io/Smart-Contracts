@@ -12,7 +12,6 @@ pragma solidity ^0.8.0;
 import "./FactoryStorage.sol";
 
 contract FactoryProxy is FactoryStorage {
-
   // Current address where stable version of ContractFactory is located;
   address private currentAddress;
   // Previous address of last stable version of ContractFactory;
@@ -47,11 +46,11 @@ contract FactoryProxy is FactoryStorage {
   // - isAccepted = true: ContractFactory unpauses and begins operation
   // - isAccepted = false: ContractFactory reverts to previous stable address and unpauses
   function acceptUpgrade(bool isAccepted) external onlyDAO {
-    if(isAccepted){
+    if (isAccepted) {
       paused = false;
       emit contractAccepted(true, currentAddress);
     }
-    if(!isAccepted){
+    if (!isAccepted) {
       currentAddress = previousStableAddress;
       paused = false;
       emit contractAccepted(false, currentAddress);
@@ -62,18 +61,21 @@ contract FactoryProxy is FactoryStorage {
   // Auto-locks after an upgrade until DAO accepts the upgrade;
   fallback() external {
     require(!paused, "ContractFactory locked until DAO approves upgrade");
-      address implementation = currentAddress;
-      require(currentAddress != address(0));
+    address implementation = currentAddress;
+    require(currentAddress != address(0));
 
-      assembly {
-        calldatacopy(0, 0, calldatasize())
-        let result := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
-        returndatacopy(0, 0, returndatasize())
-        switch result
-        case 0 {revert(0, returndatasize())}
-        default {return(0, returndatasize())}
+    assembly {
+      calldatacopy(0, 0, calldatasize())
+      let result := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
+      returndatacopy(0, 0, returndatasize())
+      switch result
+      case 0 {
+        revert(0, returndatasize())
       }
-    
+      default {
+        return(0, returndatasize())
+      }
+    }
   }
 
   function initializeDAO(address _DAOAddress) external {
@@ -81,5 +83,4 @@ contract FactoryProxy is FactoryStorage {
     require(_DAOAddress != address(0));
     DAOContract = _DAOAddress;
   }
-
 }

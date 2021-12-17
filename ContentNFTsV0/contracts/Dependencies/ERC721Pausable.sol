@@ -13,16 +13,20 @@ import "./Pausable.sol";
  * event of a large bug.
  */
 abstract contract ERC721Pausable is ERC721, Pausable {
-    /**
-     * @dev See {ERC721-_beforeTokenTransfer}.
-     *
-     * Requirements:
-     *
-     * - the contract must not be paused.
-     */
-    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal virtual override {
-        super._beforeTokenTransfer(from, to, tokenId);
+  /**
+   * @dev See {ERC721-_beforeTokenTransfer}.
+   *
+   * Requirements:
+   *
+   * - the contract must not be paused.
+   */
+  function _beforeTokenTransfer(
+    address from,
+    address to,
+    uint256 tokenId
+  ) internal virtual override {
+    super._beforeTokenTransfer(from, to, tokenId);
 
-        require(!paused(), "ERC721Pausable: token transfer while paused");
-    }
+    require(!paused(), "ERC721Pausable: token transfer while paused");
+  }
 }
