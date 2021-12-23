@@ -1,5 +1,5 @@
 /**
- * MarketplaceGetters - Version 0.1.0
+ * MarketplaceGetters - Version 0.1.1
  *
  * This is a contract full of getter functions for the Marketplace, and is the contract that is
  * deployed. Deploying this contract will deploy Marketplace and PaymentRouter, and all functions
@@ -9,6 +9,14 @@
  *
  * changed Renamed fetchMarketItems() to getInStockItems(), which is more descriptive of its
  * function as a getter of every market item that is in stock.
+ *
+ * Patch Notes: V0.1.1
+ * Accommodated for custodial design choice
+ * - changed Function names for getInStockItems() and getInStockItemIDs() have been changed
+ *   to getItemsForSale() and getItemIDsForSale() to reflect change from inStock to forSale.
+ * - changed getItemStock now refers to a MarketItem's amount property instead of calling
+ *   the ERC1155 contract for a balanceOf() operation
+ * - note I kept all of the getter functions in case they are useful for front-end
  */
 
 // SPDX-License-Identifier: MIT
@@ -84,7 +92,7 @@ contract MarketplaceGetters is Marketplace {
      * to return item details along with its stock. However, in testing this is a little
      * trickier to work with, so having dedicated getter functions for item stock is useful.
      */
-    function getInStockItems() public view returns (MarketItem[] memory, uint256[] memory) {
+    function getItemsForSale() public view returns (MarketItem[] memory) {
         // Fetch total item count, both sold and unsold
         uint itemCount = itemIDs.current();
         // Calculate total unsold items
@@ -92,33 +100,32 @@ contract MarketplaceGetters is Marketplace {
 
         // Create empty array of all unsold MarketItem structs with fixed length unsoldItemCount
         MarketItem[] memory items = new MarketItem[](unsoldItemCount);
-        uint256[] memory itemStock = new uint256[](unsoldItemCount);
 
         uint i; // itemID counter for ALL market items, starts at 1
-        uint j; // items[] index counter for UNSOLD market items, starts at 0
+        uint j; // items[] index counter for forSale market items, starts at 0
 
         // Loop that populates the items[] array
         for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
-            if (idToMarketItem[i].inStock) {
+            if (idToMarketItem[i].forSale) {
                 MarketItem memory unsoldItem = idToMarketItem[i];
                 items[j] = unsoldItem; // Assign unsoldItem to items[j]
-                itemStock[j] = getItemStock(i);
                 j++; // Increment j
             }
         }
         // Return arrays of all unsold items and their inventory
-        return (items, itemStock);
+        return (items);
     }
 
     /**
-     * @dev Getter function for all inStock itemIDs
+     * @dev Getter function for all itemIDs with forSale. This function should run lighter and faster
+     * than getItemsForSale() because it doesn't return structs.
      *
      * Use this function in combination with the following functions if getAllMarketItems() is too
      * awkward or inefficient to use. You would first call getItemIDs() and store the return value,
      * then feed that return value into getMarketItem() and getItemStock(). It also may be useful
      * to return a list of all inStock itemIDs for various other purposes too.
      */
-    function getInStockItemIDs() public view returns (uint256[] memory itemIDs_) {
+    function getItemIDsForSale() public view returns (uint256[] memory itemIDs_) {
         uint itemCount = itemIDs.current();
         uint unsoldItemCount = itemCount - itemsSoldOut.current();
         itemIDs_ = new uint256[](unsoldItemCount);
@@ -128,7 +135,7 @@ contract MarketplaceGetters is Marketplace {
 
         for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
 
-            if (idToMarketItem[i].inStock) {
+            if (idToMarketItem[i].forSale) {
                 itemIDs_[j] = i; // Assign unsoldItem to items[j]
                 j++; // Increment j
             }
@@ -153,16 +160,16 @@ contract MarketplaceGetters is Marketplace {
     }
 
     /**
-     * @dev Returns the total inventory of an item by reading seller's balanceOf()
+     * @dev Returns the total inventory of a MarketItem
      */
     function getItemStock(uint256 _itemID) public view returns (uint256 itemStock) {
         MarketItem memory item = idToMarketItem[_itemID];
-        itemStock = IERC1155(item.tokenContract).balanceOf(item.seller, item.tokenID);
+        itemStock = item.amount;
     }
 
     /**
      * @dev Overloaded version of getItemStock that takes an array of itemIDs and returns an array of
-     * item inventory from sellers' wallets.
+     * item inventories.
      */
     function getItemStock(uint256[] memory _itemIDs) public view returns (uint256[] memory itemStocks) {
         itemStocks = new uint256[](_itemIDs.length);

@@ -1,5 +1,5 @@
 /**
- * Marketplace Version 0.2.1
+ * Marketplace Version 0.2.2
  *
  * Developer notes - IMPLEMENTED IN VERSION 0.2.0:
  *
@@ -80,6 +80,14 @@
  *   never name a state variable, struct, or mapping with an underscore--with some exceptions for
  *   internal and private visibility.
  *
+ * 0.2.2 Patch Notes:
+ * Made Marketplace custodial. See function comments for details on what was changed for this.
+ * - changed Added two new functions, restockItem() and pullStock(), see below
+ * - changed Added "amount" to the ItemRestocked event and MarketItemCreated event
+ * - changed Added "amount" to MarketItem struct
+ * - changed Made all necessary changes to createMarketItem(), buyMarketItem(), and toggleInStock() 
+ * - (now toggleForSale()), see below
+ *
  *
  * TO IMPLEMENT IN VERSION 0.3.0:
  * - Implement AVAX payments that are PaymentRouter compatible
@@ -139,13 +147,14 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
          uint itemID;
          address tokenContract;
          uint256 tokenID;
+         uint256 amount;
          address seller;
          uint256 price;
          address paymentContract;
          bool isPush;
          bytes32 routeID;
          bool routeMutable;
-         bool inStock;
+         bool forSale;
          uint256 itemLimit;
     }
      
@@ -169,6 +178,7 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
         uint256 indexed tokenID,
         address seller,
         uint256 price,
+        uint256 amount,
         string tokenTicker
     );
      
@@ -189,7 +199,8 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
 
     // Fires when creator restocks items that are sold out
     event ItemRestocked(
-        uint indexed itemID
+        uint indexed itemID,
+        uint amount
     );
 
     // Fires when last item is bought, or when creator removes all items
@@ -222,11 +233,13 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
      * @param _tokenContract Token contract address of the item being sold
      * @param _sellerAddress Address where tokens are being sold from
      * @param _tokenID The token contract ID of the item being sold
+     * @param _amount The amount of items available for purchase
      * @param _price The price--in payment tokens--of the item being sold
      * @param _paymentContract Contract address of token accepted for payment--usually stablecoins
      * @param _isPush Tells PaymentRouter to use push or pull function for this item
-     * @param _inStock Sets whether item is immediately up for sale
+     * @param _forSale Sets whether item is immediately up for sale
      * @param _routeID The routeID of the payment route assigned to this item
+     * @param _itemLimit How many items a buyer can own, 0 == no limit
      * @param _routeMutable Assigns mutability to the routeID, keep false for most items
      *
      * note Front-end must call IERC1155.setApprovalForAll(marketAddress, true) before calling
@@ -250,35 +263,52 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
      * can know they will always get paid and nobody can change it.
      *
      * changed Added _sellerAddress as an input. This argument assigns an address to be the "seller"
-     * who has permission to modify the item and toggle inStock. All item tokens should be minted to
-     * and sold from this address, even if it isn't msg.sender. This will be used later on when
-     * inventory contracts are rolled out, which will hold the item tokens being sold and will
-     * allow for inventory control as well as provide a way for collaborations to sell their items
-     * without any one collaborator holding or controlling the tokens.
+     * who has permission to modify the MarketItem and toggle forSale.
+     *
+     * Patch Notes V 0.2.2
+     * Accommodated for custodial design of Marketplace
+     * - Changed _itemLimit now accepts 0 as a valid input, where 0 is used for infinite itemLimit.
+     *   It achieves this by intentional underflowing.
+     * - Changed Added require check for ERC1155.isApprovedForAll()
+     * - Changed Added an invariant check to make sure the ERC1155 balanceOf reports the same
+     *   number as the MarketItem's amount for the Marketplace's balance
+     * - Changed Added transferFrom() operation for tokens
+     * - Added a few new comments to better organize the function
      */
     
     function createMarketItem(
         address _tokenContract,
         address _sellerAddress,
         uint256 _tokenID,
+        uint256 _amount,
         uint256 _price,
         address _paymentContract,
         bool _isPush,
-        bool _inStock,
+        bool _forSale,
         bytes32 _routeID,
         uint256 _itemLimit,
         bool _routeMutable
         ) external 
         returns (uint256 itemID) {
-            require(_itemLimit > 0, "Item limit cannot be 0");
+        // CHECKS
             require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
             require(_price > 0, "Price cannot be 0");
             require(IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID) > 0, "Insufficient tokens");
+            require(IERC1155(_tokenContract).isApprovedForAll(_msgSender(), address(this)), "Insufficient allowance");
             require(_paymentContract != address(0), "Invalid payment token contract address");
             require(paymentRouteID[_routeID].isActive, "Payment route inactive");
 
+            // If itemLimit == 0, then there is no itemLimit, use underflow to make itemLimit infinite
+             // Yes, the underflow "error" is intentional
+            if(_itemLimit == 0) {
+                unchecked {
+                    _itemLimit -= 1;
+                }
+            }
+
+        //EFFECTS
             // Increases itemIDs by 1, stores current value as itemID
-            itemIDs.increment(); // Increment itemIDs first so item IDs begin at 1 instead of 0
+            itemIDs.increment(); // Increment itemIDs first so itemIDs begin at 1 instead of 0
             itemID = itemIDs.current();
 
             // Assigns MarketItem to itemID
@@ -286,17 +316,21 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
                 itemID,
                 _tokenContract,
                 _tokenID,
+                _amount,
                 _sellerAddress,
                 _price,
                 _paymentContract,
                 _isPush,
                 _routeID,
                 _routeMutable,
-                _inStock,
+                _forSale,
                 _itemLimit
             );
 
-            // Add itemID to seller's market items array
+            // Store new MarketItem in local variable
+            MarketItem memory item = idToMarketItem[itemID];
+
+            // Push itemID to seller's market items array
             sellersMarketItems[_msgSender()].push(itemID);
 
             // Assign itemID to tokenMap mapping
@@ -309,8 +343,17 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
                 _tokenID,
                 _msgSender(),
                 _price,
+                _amount,
                 ERC20(_paymentContract).symbol()
-            );
+            );            
+
+        // INTERACTIONS
+            // Transfer tokens from seller to Marketplace
+            IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
+
+            // This should pass in all conditions
+            assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
+
     }
     
     /**
@@ -319,6 +362,7 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
      * @param _itemID Market ID of item being bought
      * @param _amount Amount of item itemID being purchased
      *
+     * Patch Notes: V0.2.1
      * bug tokenID referred to item.itemID, but was supposed to be item.tokenID
      * bug In balanceOf require check, boolean operator was ==, which will revert if user's balance
      * is greater than price * _amount
@@ -328,40 +372,115 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
      * - tokenContract => paymentContract
      *
      * changed Removed almost all local variable declarations because stack was running too deep
+     *
+     * Patch Notes: V0.2.2
+     * - Removed sellersBalance and its require check, replaced with check for inventory != 0
+     * - Replaced sellersBalance with item.amount
+     * - Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
+     * - Added _amount to last require check, so the buyer's _amount plus their balanceOf cannot
+     *   be greater than the itemLimit
+     * - Events were emitting the tokenID instead of itemID, fixed it so now the events will report
+     *   the itemID that was sold instead of the tokenID
+     * - _pushTokens and _holdTokens were receiving the item's price, not the correct amount of
+     *   tokens that are the price * amount. Added the totalCost uint to calculate this, and 
+     *   replaced item.price with totalCost for these functions.
+     * - Added a few extra comments
+     * - Added fringe check for _itemID == 0
      */
     function buyMarketItem(uint256 _itemID, uint256 _amount) external nonReentrant() returns (bool) {
         // Pull data from itemID's MarketItem struct
         MarketItem memory item = idToMarketItem[_itemID];
-        // Store seller's token balance
-        uint256 sellerBalance = IERC1155(item.tokenContract).balanceOf(item.seller, item.tokenID);
+        // Defines total cost of purchase
+        uint256 totalCost = item.price * _amount;
 
         // CHECKS:
-        require(item.inStock, "Item not in stock");
-        require(sellerBalance != 0, "Item sold out");
+        require(_itemID != 0, "Item does not exist");
+        require(item.forSale, "Item not for sale");
+        require(item.amount != 0, "Item sold out");
         require(IERC20(item.paymentContract).balanceOf(_msgSender()) >= item.price * _amount, "Insufficient funds");
         require(_msgSender() != item.seller, "Can't buy your own item");
-        require(IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) < item.itemLimit, 
+        require(IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) + _amount <= item.itemLimit, 
             "Purchase exceeds item limit");
 
         // EFFECTS
-        if(sellerBalance <= _amount){ // If buy order exceeds all available stock, then:
+        if(item.amount <= _amount){ // If buy order exceeds all available stock, then:
             itemsSoldOut.increment(); // Increment counter variable for items sold out
-            emit ItemSoldOut(item.tokenID); // Emit itemSoldOut event
-            _amount = sellerBalance; // Set _amount to the seller's remaining balance
-            idToMarketItem[_itemID].inStock = false; // Set inStock to false
+            _amount = item.amount; // Set _amount to the item's remaining inventory
+            idToMarketItem[_itemID].forSale = false; // Set forSale to false
+            emit ItemSoldOut(item.itemID); // Emit itemSoldOut event
         }
 
-        emit MarketItemSold(item.tokenID, _amount, _msgSender());
-
-        // Send tokens through PaymentRouter, isPush determines which function is used
-        item.isPush ? 
-            _pushTokens(item.routeID, item.paymentContract, item.price): // Pushes tokens to recipients
-            _holdTokens(item.routeID, item.paymentContract, item.price); // Holds tokens for pull collection
+        // Adjust Marketplace's itemID inventory
+        idToMarketItem[_itemID].amount -= _amount;
+        // Emit marketItemSold
+        emit MarketItemSold(item.itemID, _amount, _msgSender());
 
         //INTERACTIONS
-        // Call market item's token contract and transfer token from seller to buyer
-        IERC1155(item.tokenContract).safeTransferFrom(item.seller, _msgSender(), item.tokenID, _amount, "");
+        // Send ERC20 tokens through PaymentRouter, isPush determines which function is used
+         // note PaymentRouter functions make external calls to ERC20 contracts, thus they are interactions
+        item.isPush ? 
+            _pushTokens(item.routeID, item.paymentContract, totalCost): // Pushes tokens to recipients
+            _holdTokens(item.routeID, item.paymentContract, totalCost); // Holds tokens for pull collection
+
+        // Call market item's token contract and transfer token from Marketplace to buyer
+        IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
+
+        assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
         return true;
+    }
+
+    /**
+     * @dev Transfers more stock to a MarketItem, requires minting more tokens first and setting
+     * approval for Marketplace
+     *
+     * @param _itemID MarketItem ID
+     * @param _amount Amount of tokens being restocked
+     */
+    function restockItem(uint256 _itemID, uint256 _amount) external onlySeller(_itemID) {
+        MarketItem memory item = idToMarketItem[_itemID];
+        // CHECKS
+        require(_itemID != 0, "MarketItem does not exist");
+        require(IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount, 
+                "Insufficient tokens to restock");
+        require(IERC1155(item.tokenContract).isApprovedForAll(_msgSender(), address(this)),
+                "Marketplace is not approved for token transfer");
+
+        // EFFECTS
+        idToMarketItem[_itemID].amount += _amount;
+        emit ItemRestocked(_itemID, _amount);
+
+        // INTERACTIONS
+        IERC1155(item.tokenContract).safeTransferFrom(item.seller, address(this), item.tokenID, _amount, "");
+
+        assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
+    }
+
+    /**
+     * @dev Removes _amount of item tokens for _itemID and transfers back to seller's wallet
+     *
+     * @param _itemID MarketItem's ID
+     * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
+     */
+    function pullStock(uint256 _itemID, uint256 _amount) external onlySeller(_itemID) {
+        MarketItem memory item = idToMarketItem[_itemID]; // Store initial values
+        // CHECKS
+        require(_itemID != 0, "MarketItem does not exist");
+        require(item.amount >= _amount, 
+                "Not enough inventory to pull");
+
+        // Pulls all remaining tokens if _amount == 0
+        if(_amount == 0) {
+            _amount = item.amount;
+        }
+        
+        // EFFECTS
+        idToMarketItem[_itemID].amount -= _amount;
+
+        // INTERACTIONS
+        IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
+
+        // This should always pass
+        assert(idToMarketItem[_itemID].amount < item.amount);
     }
 
     /**
@@ -378,7 +497,9 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
      * note What cannot be modified:
      * - Token contract address
      * - Token contract token ID
-     * - Original seller/creator of market item
+     * - Seller of market item
+     * - RouteID mutability
+     * - Item's forSale status
      *
      * changed Added MarketItemChanged event
      *
@@ -403,13 +524,14 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
             _itemID,
             oldItem.tokenContract,
             oldItem.tokenID,
+            oldItem.amount,
             oldItem.seller,
             _price,
             _paymentContract,
             _isPush,
             _routeID,
             oldItem.routeMutable,
-            oldItem.inStock,
+            oldItem.forSale,
             _itemLimit
         );
         
@@ -418,31 +540,25 @@ abstract contract Marketplace is ReentrancyGuard, PaymentRouter {
     }
 
     /**
-     * @dev Toggles whether an item is in stock or not
+     * @dev Toggles whether an item is for sale or not
      *
      * Use this function to activate/deactivate items for sale on market. Only items that are
-     * in stock will be returned by fetchMarketItems().
+     * forSale will be returned by getInStockItems().
      *
      * @param _itemID Marketplace ID of item for sale
      *
-     * Fires ItemSoldOut() if inStock is disabled
-     * Fires ItemRestocked() if inStock is enabled
-     *
-     * note I tried to use a simpler function that sets the value of inStock with the input,
-     * but doing so doesn't handle any logic for emitting events, which would end up creating
-     * a function that looks similar to this one anyways. So, might as well just make it a 
-     * toggle switch and call it a feature.
+     * Patch Notes V0.2.2
+     * - Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
+     * - Removed events, since they don't really make sense to use here.
      */
-    function toggleInStock(uint256 _itemID) external onlySeller(_itemID) {
-        if(idToMarketItem[_itemID].inStock) {
+    function toggleForSale(uint256 _itemID) external onlySeller(_itemID) {
+        if(idToMarketItem[_itemID].forSale) {
             itemsSoldOut.increment();
-            idToMarketItem[_itemID].inStock = false;
-            emit ItemSoldOut(_itemID);
+            idToMarketItem[_itemID].forSale = false;
         }
         else {
             itemsSoldOut.decrement();
-            idToMarketItem[_itemID].inStock = true;
-            emit ItemRestocked(_itemID);
+            idToMarketItem[_itemID].forSale = true;
         }
     }
       
