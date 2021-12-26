@@ -22,9 +22,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../Dependencies/Counters.sol";
 import "./Marketplace.sol";
-import "../Dependencies/ReentrancyGuard.sol";
 
 contract MarketplaceGetters is Marketplace {
     using Counters for Counters.Counter;

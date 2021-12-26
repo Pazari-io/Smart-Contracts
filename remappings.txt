@@ -1,5 +1,5 @@
 ds-test/=dapp_test/lib/
-contracts/=../contracts
+contracts=contracts/
 hardhat/=node_modules/hardhat/
 @openzeppelin/=node_modules/@openzeppelin/
 hardhat-deploy/=node_modules/hardhat-deploy/
