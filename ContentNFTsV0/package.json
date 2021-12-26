@@ -4,21 +4,30 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "compile": "npx hardhat compile",
+    "recompile": "yarn clean && npx hardhat compile",
+
+    "script:localhost": "npx hardhat run --network localhost",
+    "script:azure": "npx hardhat run --network azure",
+    "script:rinkeby": "npx hardhat run --network rinkeby",
+    "script:polygon": "npx hardhat run --network localhost",
+
+    "test": "yarn test:dapp && yarn test:hh",
+    "test:dapp": "dapp test",
+    "test:hh": "npx hardhat test",
+
     "lint": "eslint \"**/*.{js,ts}\" && solhint src/**/*.sol",
     "lint:fix": "eslint --fix \"**/*.{js,ts}\" && solhint --fix src/**/*.sol",
     "lint:sol": "solhint -f table contracts/**/*.sol",
     "format": "prettier --check \"**/*.{ts,js,sol}\"",
     "format:fix": "prettier --write \"**/*.{ts,js,sol}\"",
-    "compile": "npx hardhat compile",
-    "recompile": "yarn clean && npx hardhat compile",
-    "test": "npx hardhat test",
-    "fork": "npx hardhat node",
-    "clean": "rm -rf abi artifacts cache types"
-  },
-  "husky": {
-    "hooks": {
-      "pre-push": "npm run format:fix"
-    }
+
+    "localnode": "hardhat node",
+    "gas": "REPORT_GAS=true hardhat test",
+    "coverage": "HARDHAT_DEPLOY_FIXTURE=true hardhat coverage",
+    "typechain": "TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
+    "clean": "rm -rf abi artifacts cache types",
+    "check:push": "yarn format:fix && yarn lint:fix && yarn lint:sol"
   },
   "author": "",
   "license": "ISC",

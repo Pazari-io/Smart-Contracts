@@ -27,4 +27,3 @@ deployments/localhost
 /.dapp
 abi
 types
-!contracts/types

@@ -97,7 +97,7 @@ const config: HardhatUserConfig = {
     artifacts: "./artifacts",
     cache: "./cache",
     sources: "./contracts",
-    tests: "./test",
+    tests: "./hardhat_test",
   },
   preprocess: {
     eachLine: removeConsoleLog(

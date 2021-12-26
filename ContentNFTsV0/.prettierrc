@@ -1,17 +1,20 @@
 {
-  "printWidth": 100,
+  "printWidth": 120,
   "tabWidth": 2,
   "trailingComma": "all",
   "singleQuote": false,
   "endOfLine": "auto",
+  "bracketSpacing": true,
   "overrides": [
     {
       "files": "*.sol",
       "options": {
-        "printWidth": 150,
-        "tabWidth": 2,
-        "explicitTypes": "always"
+        "printWidth": 100,
+        "tabWidth": 4,
+        "explicitTypes": "always",
+        "singleQuote": false
       }
     }
-  ]
+  ],
+  "plugins": ["prettier-plugin-solidity"]
 }

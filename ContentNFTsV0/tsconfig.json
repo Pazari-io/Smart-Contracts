@@ -12,7 +12,7 @@
     "hardhat.config.ts",
     "./scripts",
     "./deploy",
-    "./test",
+    "./hardhat_test",
     "./utils",
     "types/**/*"
   ],

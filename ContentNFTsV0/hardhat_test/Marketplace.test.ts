@@ -86,9 +86,9 @@ describe("Marketplace", () => {
     const amount = 5;
 
     //Function parameters for token.mint():
-    const amountMint = 5;
-    const tokenURI = "WEBSITE URL";
-    const data = "0x";
+    // const amountMint = 5;
+    // const tokenURI = "WEBSITE URL";
+    // const data = "0x";
 
     it("can create a basic item", async () => {
       const nftContract = token.address;
@@ -150,9 +150,9 @@ describe("Marketplace", () => {
     const amountSell = 2;
 
     //Function parameters for token.mint():
-    const amountMint = 5;
-    const tokenURI = "WEBSITE URL";
-    const data = 0x0;
+    // const amountMint = 5;
+    // const tokenURI = "WEBSITE URL";
+    // const data = 0x0;
 
     it("can buy a basic item", async () => {
       await token.setApprovalForAll(marketplace.address, true);

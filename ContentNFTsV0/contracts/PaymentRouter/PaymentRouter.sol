@@ -3,39 +3,39 @@
  *
  * @dev This contract takes in ERC20 tokens, splits them, and routes them to their recipients. It extracts a
  * "route tax" before routing payment to recipients, which is used to fund the platform.
- * 
- * This contract's design was inspired by OpenZeppelin's PaymentSplitter contract, but does not resemble that
- * contract very much anymore. It has since been heavily modified for our purposes. Unlike the OpenZeppelin 
- * PaymentSplitter contract, the PaymentRouter contract only accepts ERC20 tokens, and is designed to track
- * many different "routes" for many users. 
  *
- * Payment routes are token-agnostic, and will redirect any ERC20 token of any amount that is passed through 
- * them to the recipients specified according to their commission,  which is transferred *after* the platform tax 
+ * This contract's design was inspired by OpenZeppelin's PaymentSplitter contract, but does not resemble that
+ * contract very much anymore. It has since been heavily modified for our purposes. Unlike the OpenZeppelin
+ * PaymentSplitter contract, the PaymentRouter contract only accepts ERC20 tokens, and is designed to track
+ * many different "routes" for many users.
+ *
+ * Payment routes are token-agnostic, and will redirect any ERC20 token of any amount that is passed through
+ * them to the recipients specified according to their commission,  which is transferred *after* the platform tax
  * is transferred to the treasury.
- * 
+ *
  * Commissions are assigned in fractions of 10000, which allows for percentages with 2 decimal points. Since
  * no single commission will ever be greater than 10000 we can use the uint16 data type to save some storage space
  * and potentially some gas fees too (this has not been confirmed though).
  *
  * It contains both push and pull functions, which have different trade-offs.
  *
- * The push model is more gas-intensive and doesn't make sense for micro-payments where the gas fee for a 20+ 
- * recipient commissions list for an item worth, say, $5 would be absurdly high, but if it's a big-ticket item 
+ * The push model is more gas-intensive and doesn't make sense for micro-payments where the gas fee for a 20+
+ * recipient commissions list for an item worth, say, $5 would be absurdly high, but if it's a big-ticket item
  * worth many thousands of USD then it would make more sense to use a push function for a large developer team.
  * Push function is convenient for the recipients, as they don't have to collect their pay--unless the transfer
  * operation fails for some reason.
  *
- * The pull model is lighter on buyers' gas costs, but requires the recipients to collect their earnings manually 
+ * The pull model is lighter on buyers' gas costs, but requires the recipients to collect their earnings manually
  * and pay a (miniscule) gas fee when they do. The buyer only has to pay for two ERC20 transfer operations, plus
- * updates to contract mappings, when they call _holdTokens(). 
+ * updates to contract mappings, when they call _holdTokens().
  *
- * idea We may be able to optimize the pull function further by ensuring that mappings are never set back to 
+ * idea We may be able to optimize the pull function further by ensuring that mappings are never set back to
  * default values, but instead always maintain a minimum value that isn't counted. This is because writing to
  * a storage slot with a default value can be twice as expensive as modifying a storage slot that already has
  * a non-default value, and some of these mappings are reset to default values. Might be worth exploring for
  * a version 0.2.0.
  *
- * idea In future, if meta-transactions are possible, then we should charge route creators a "gas tax" that 
+ * idea In future, if meta-transactions are possible, then we should charge route creators a "gas tax" that
  * would be calculated based on the number of recipients they are splitting commissions among, as each one
  * is either an ERC20 transferFrom function that needs to be ran, or a mapping that needs to be updated. Let's
  * leave this for a V2 though.
@@ -76,7 +76,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../Dependencies/Address.sol";
+// import "../Dependencies/Address.sol";
 import "../Dependencies/Context.sol";
 import "../Dependencies/IERC20.sol";
 import "../Dependencies/ReentrancyGuard.sol";
@@ -85,11 +85,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // ****PAYMENT ROUTES****
 
-    // Fires when a new payment route is created    
+    // Fires when a new payment route is created
     event routeCreated(
-        address indexed creator, 
-        bytes32 routeID, 
-        address[] recipients, 
+        address indexed creator,
+        bytes32 routeID,
+        address[] recipients,
         uint16[] commissions
     );
 
@@ -98,7 +98,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // Tax rate paid by a route
     // route ID => tax rate
-    mapping(bytes32 => uint16) routeTax; 
+    mapping(bytes32 => uint16) routeTax;
 
     // Min and max tax rates that routes must meet
     uint16 minTax;
@@ -106,11 +106,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // Mapping for route ID to route data
     // route ID => payment route
-    mapping(bytes32 => PaymentRoute) public paymentRouteID; 
+    mapping(bytes32 => PaymentRoute) public paymentRouteID;
 
     // Mapping of all routeIDs created by a route creator address
     // creator's address => routeIDs
-    mapping(address => bytes32[]) internal creatorRoutes; 
+    mapping(address => bytes32[]) internal creatorRoutes;
 
     // Struct that defines a new PaymentRoute
     struct PaymentRoute {
@@ -124,20 +124,20 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // Fires when a route has processed a push-transfer operation
     event transferReceipt(
-        address indexed sender, 
-        bytes32 routeID, 
-        address tokenContract, 
-        uint256 amount, 
+        address indexed sender,
+        bytes32 routeID,
+        address tokenContract,
+        uint256 amount,
         uint256 tax,
         uint256 timeStamp
     );
 
     // Fires when a push-transfer operation fails
     event transferFailed(
-        address indexed sender, 
-        bytes32 routeID, 
+        address indexed sender,
+        bytes32 routeID,
         uint256 payment,
-        uint256 timestamp, 
+        uint256 timestamp,
         address recipient
     );
 
@@ -145,12 +145,12 @@ contract PaymentRouter is Context, ReentrancyGuard {
     // recipient address => token address => held tokens
     mapping(address => mapping(address => uint256)) failedTokens;
 
-        
+
     // ****PULL FUNCTIONS****
 
     // Mapping for total balance of tokens that are currently being held by a payment route
     // route ID => token address => token balance
-    mapping (bytes32 => mapping(address => uint256)) internal routeTokenBalance; 
+    mapping (bytes32 => mapping(address => uint256)) internal routeTokenBalance;
 
     // Mapping for amount of tokens that have been released from holding by a payment route
     // route ID => token address => amount released
@@ -158,7 +158,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // Mapping of tokens released from holding by recipient
     // recipient address => routeID => token address => amount released
-    mapping(address => mapping(bytes32 => mapping(address => uint256))) internal recipTokensReleased; 
+    mapping(address => mapping(bytes32 => mapping(address => uint256))) internal recipTokensReleased;
 
     // Fires when tokens are deposited into a payment route for holding
     event TokensHeld(bytes32 routeID, address tokenAddress, uint256 amount);
@@ -170,7 +170,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
     // ****DEVELOPERS****
 
     // Address of treasury contract where route taxes will be sent
-    address treasuryAddress; 
+    address treasuryAddress;
 
     // Mapping that tracks if an address is a developer
     // ****REMOVE BEFORE DEPLOYMENT****
@@ -196,7 +196,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
     }
 
     // ****REMOVE WHEN TREASURY CONTRACT READY, CHANGE MODIFIER TO FUNCTION CALL TO CHECK DEV STATUS****
-    modifier onlyDev() {
+    modifier onlyDev {
         require(isDev[msg.sender], "Only developers can access this function");
         _;
     }
@@ -219,7 +219,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
         // Check for front-end errors
         //require(_recipients[0] == treasuryAddress && _commissions[0] == 300, "Must include platform tax");
         require(_recipients.length == _commissions.length, "Array lengths must match");
-        
+
         // Iterate through all entries submitted and check for upload errors
         uint16 totalCommissions;
         for(uint i = 0; i < _recipients.length; i++){
@@ -254,7 +254,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * @param _routeID Unique ID of payment route
      * @param _tokenAddress Contract address of tokens being transferred
      * @param _amount Amount of tokens being routed
-     * 
+     *
      * note If any of the transfers should fail for whatever reason, then the transaction should
      * *not* revert. Instead, it will run _storeFailedTransfer which holds on to the recipient's
      * tokens until they are collected. This also throws the transferFailed event.
@@ -284,7 +284,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
             // If transferFrom() fails:
             if(!IERC20(_tokenAddress).transferFrom(_msgSender(), route.recipients[i], payment)){
                 // Emit failure event alerting recipient they have tokens to collect
-                emit transferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]); 
+                emit transferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
                 // Store tokens in contract for holding until recipient collects them
                 _storeFailedTransfer(_tokenAddress, route.recipients[i], payment);
                 continue; // Continue to next recipient
@@ -294,7 +294,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
         // Emit a transferReceipt event to all recipients
         emit transferReceipt(_msgSender(), _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
         return true;
-    }    
+    }
 
     /**
      * @dev Internal function that accepts ERC20 tokens and escrows them until pulled by payment route recipients
@@ -335,7 +335,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
         uint256 amount;
         amount = failedTokens[_msgSender()][_tokenAddress];
         require(IERC20(_tokenAddress).transfer(_msgSender(), amount), "Transfer failed!");
-        
+
         assert(failedTokens[_msgSender()][_tokenAddress] == 0);
         return true;
     }
@@ -393,7 +393,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
     }
 
     /**
-     * @dev Opens a new payment route. 
+     * @dev Opens a new payment route.
      * Returns the routeID hash of the created PaymentRoute, and emits a routeCreated event.
      *
      * @param _recipients Array of all recipient addresses for this payment route
@@ -403,10 +403,10 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * they make this function look more complicated than it is.
      */
     function openPaymentRoute(
-        address[] memory _recipients, 
+        address[] memory _recipients,
         uint16[] memory _commissions,
-        uint16 _routeTax) 
-        external 
+        uint16 _routeTax)
+        external
         newRouteChecks(_recipients, _commissions)
         returns (bytes32 routeID) {
             // Creates routeID from hashing contents of new PaymentRoute
@@ -441,8 +441,8 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * obscures the order in which routes were created. Every creator has a list of routes they created
      * as well, making it even less likely that funds will be sent the wrong way.
      */
-    function getPaymentRouteID(address _routeCreator, address[] memory _recipients, uint16[] memory _commissions) 
-         public pure 
+    function getPaymentRouteID(address _routeCreator, address[] memory _recipients, uint16[] memory _commissions)
+         public pure
          returns(bytes32 routeID) {
         routeID = keccak256(abi.encodePacked(_routeCreator, _recipients, _commissions));
     }
@@ -460,9 +460,9 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * their own platform taxes, and we cater to those who pay us more.
      *
      * If a route creator chooses to pay a higher tax, then the platform's search algorithm will
-     * place items tied to that route higher on the search results. 
+     * place items tied to that route higher on the search results.
      *
-     * idea If a route creator chooses 100% tax then they become a "sponsor" of the platform 
+     * idea If a route creator chooses 100% tax then they become a "sponsor" of the platform
      * and receive huge promotional boosts for the items tied to the route.
      */
     function adjustRouteTax(bytes32 _routeID, uint16 _newTax) external onlyCreator(_routeID) returns (bool) {
@@ -485,7 +485,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
     function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev() {
         require(_minTax >= 0, "Minimum tax < 0.00%");
         require(_maxTax <= 10000, "Maximum tax > 100.00%");
-        
+
         minTax = _minTax;
         maxTax = _maxTax;
     }
