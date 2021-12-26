@@ -30,12 +30,13 @@ contract MarketplaceGetters is Marketplace {
     using Counters for Counters.Counter;
 
     constructor(
-        address _treasuryAddress, 
-        address[] memory _developers, 
-        uint16 _minTax, 
-        uint16 _maxTax) PaymentRouter(_treasuryAddress, _developers, _minTax, _maxTax)  {
-            super;
-        }
+        address _treasuryAddress,
+        address[] memory _developers,
+        uint16 _minTax,
+        uint16 _maxTax
+    ) PaymentRouter(_treasuryAddress, _developers, _minTax, _maxTax) {
+        super;
+    }
 
     /**
      * @dev Helper functions to retrieve the last and next created itemIDs
@@ -94,15 +95,15 @@ contract MarketplaceGetters is Marketplace {
      */
     function getItemsForSale() public view returns (MarketItem[] memory) {
         // Fetch total item count, both sold and unsold
-        uint itemCount = itemIDs.current();
+        uint256 itemCount = itemIDs.current();
         // Calculate total unsold items
-        uint unsoldItemCount = itemCount - itemsSoldOut.current();
+        uint256 unsoldItemCount = itemCount - itemsSoldOut.current();
 
         // Create empty array of all unsold MarketItem structs with fixed length unsoldItemCount
         MarketItem[] memory items = new MarketItem[](unsoldItemCount);
 
-        uint i; // itemID counter for ALL market items, starts at 1
-        uint j; // items[] index counter for forSale market items, starts at 0
+        uint256 i; // itemID counter for ALL market items, starts at 1
+        uint256 j; // items[] index counter for forSale market items, starts at 0
 
         // Loop that populates the items[] array
         for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
@@ -126,15 +127,14 @@ contract MarketplaceGetters is Marketplace {
      * to return a list of all inStock itemIDs for various other purposes too.
      */
     function getItemIDsForSale() public view returns (uint256[] memory itemIDs_) {
-        uint itemCount = itemIDs.current();
-        uint unsoldItemCount = itemCount - itemsSoldOut.current();
+        uint256 itemCount = itemIDs.current();
+        uint256 unsoldItemCount = itemCount - itemsSoldOut.current();
         itemIDs_ = new uint256[](unsoldItemCount);
 
-        uint i; // itemID counter for ALL market items, starts at 1
-        uint j; // itemIDs_[] index counter for STOCKED market items, starts at 0
+        uint256 i; // itemID counter for ALL market items, starts at 1
+        uint256 j; // itemIDs_[] index counter for STOCKED market items, starts at 0
 
         for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
-
             if (idToMarketItem[i].forSale) {
                 itemIDs_[j] = i; // Assign unsoldItem to items[j]
                 j++; // Increment j
@@ -152,9 +152,13 @@ contract MarketplaceGetters is Marketplace {
     /**
      * @dev Overloaded version of getMarketItem that takes an array as argument and returns an array
      */
-    function getMarketItem(uint256[] memory _itemIDs) public view returns (MarketItem[] memory marketItem) {
+    function getMarketItem(uint256[] memory _itemIDs)
+        public
+        view
+        returns (MarketItem[] memory marketItem)
+    {
         marketItem = new MarketItem[](_itemIDs.length);
-        for(uint i = 0; i < _itemIDs.length; i++){
+        for (uint256 i = 0; i < _itemIDs.length; i++) {
             marketItem[i] = idToMarketItem[_itemIDs[i]];
         }
     }
@@ -171,11 +175,14 @@ contract MarketplaceGetters is Marketplace {
      * @dev Overloaded version of getItemStock that takes an array of itemIDs and returns an array of
      * item inventories.
      */
-    function getItemStock(uint256[] memory _itemIDs) public view returns (uint256[] memory itemStocks) {
+    function getItemStock(uint256[] memory _itemIDs)
+        public
+        view
+        returns (uint256[] memory itemStocks)
+    {
         itemStocks = new uint256[](_itemIDs.length);
-        for(uint i = 0; i < _itemIDs.length; i++){
+        for (uint256 i = 0; i < _itemIDs.length; i++) {
             itemStocks[i] = getItemStock(_itemIDs[i]);
         }
     }
-
 }

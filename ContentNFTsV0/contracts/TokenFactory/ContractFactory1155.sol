@@ -15,11 +15,11 @@ import "../Dependencies/ERC721PresetMinterPauserAutoId.sol";
 import "./FactoryStorage.sol";
 
 contract ContractFactory1155 is FactoryStorage {
-  // Clones an ERC1155PresetMinterPauser contract with IPFS minting support;
-  function newERC1155Contract() external returns (address newContract) {
-    ERC1155PresetMinterPauser _newContract = new ERC1155PresetMinterPauser();
-    newContract = address(_newContract);
+    // Clones an ERC1155PresetMinterPauser contract with IPFS minting support;
+    function newERC1155Contract() external returns (address newContract) {
+        ERC1155PresetMinterPauser _newContract = new ERC1155PresetMinterPauser();
+        newContract = address(_newContract);
 
-    _storeInfo(newContract, 0);
-  }
+        _storeInfo(newContract, 0);
+    }
 }

@@ -15,11 +15,17 @@ import "../Dependencies/ERC721PresetMinterPauserAutoId.sol";
 import "./FactoryStorage.sol";
 
 contract ContractFactory721 is FactoryStorage {
-  // Clones an ERC721PresetMinterPauserAutoId contract with IPFS minting support;
-  function newERC721Contract(string memory name, string memory symbol) external returns (address newContract) {
-    ERC721PresetMinterPauserAutoId _newContract = new ERC721PresetMinterPauserAutoId(name, symbol);
-    newContract = address(_newContract);
+    // Clones an ERC721PresetMinterPauserAutoId contract with IPFS minting support;
+    function newERC721Contract(string memory name, string memory symbol)
+        external
+        returns (address newContract)
+    {
+        ERC721PresetMinterPauserAutoId _newContract = new ERC721PresetMinterPauserAutoId(
+            name,
+            symbol
+        );
+        newContract = address(_newContract);
 
-    _storeInfo(newContract, 1);
-  }
+        _storeInfo(newContract, 1);
+    }
 }

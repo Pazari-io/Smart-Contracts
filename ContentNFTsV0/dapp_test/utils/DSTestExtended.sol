@@ -14,10 +14,9 @@ contract DSTestExtended is DSTest {
     /// @notice Calls function and checks for matching revert message
     /// @param erroringFunction to call
     /// @param message to check against revert error string
-    function assertErrorWithMessage(
-        function() external erroringFunction,
-        string memory message
-    ) internal {
+    function assertErrorWithMessage(function() external erroringFunction, string memory message)
+        internal
+    {
         try erroringFunction() {
             fail();
         } catch Error(string memory error) {
@@ -66,12 +65,12 @@ contract DSTestExtended is DSTest {
     /// @param value to pass with function call
     /// @param message to check against revert error string
     function assertErrorWithMessagePayable(
-        function(uint256) payable external erroringFunction,
+        function(uint256) external payable erroringFunction,
         uint256 param,
         uint256 value,
         string memory message
     ) internal {
-        try erroringFunction{value: value}(param) {
+        try erroringFunction{ value: value }(param) {
             fail();
         } catch Error(string memory error) {
             // Assert revert error matches expected message

@@ -53,16 +53,16 @@ const config: HardhatUserConfig = {
       chainId: 43113,
       url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/avalanche/testnet`,
       accounts: {
-        mnemonic: MNEMONIC_TESTNET
-      }
+        mnemonic: MNEMONIC_TESTNET,
+      },
     },
     avax: {
       chainId: 43114,
       url: `https://speedy-nodes-nyc.moralis.io/${process.env.MORALIS_API_KEY}/avalanche/mainnet`,
       accounts: {
-        mnemonic: MNEMONIC_MAINNET
-      }
-    }
+        mnemonic: MNEMONIC_MAINNET,
+      },
+    },
   },
   solidity: {
     compilers: [
@@ -100,9 +100,7 @@ const config: HardhatUserConfig = {
     tests: "./hardhat_test",
   },
   preprocess: {
-    eachLine: removeConsoleLog(
-      (bre) => bre.network.name !== "hardhat" && bre.network.name !== "localhost",
-    ),
+    eachLine: removeConsoleLog((bre) => bre.network.name !== "hardhat" && bre.network.name !== "localhost"),
   },
   watcher: {
     compile: {

@@ -1,8 +1,4 @@
-import {
-  ContractFactory1155__factory,
-  ERC1155PresetMinterPauser__factory,
-  MarketplaceV0__factory,
-} from "../../types";
+import { ContractFactory1155__factory, ERC1155PresetMinterPauser__factory, MarketplaceV0__factory } from "../../types";
 import { MacroChain, verifyContract } from "../../utils";
 
 const main = async () => {
@@ -20,7 +16,7 @@ const main = async () => {
   //MINT MULTIPLE TOKENS
   console.log("Minting multiple tokens with IDs 2, 3, 4, 5:");
   const seller = "";
-  const tokenURI = ""
+  const tokenURI = "";
   const data = "0x";
   await token.mint(seller, 2, 1, tokenURI, data);
   await token.mint(seller, 3, 10, tokenURI, data);
@@ -41,22 +37,15 @@ const main = async () => {
   console.log(await market.fetchMarketItems());
   //BUY MULTIPLE (BUT NOT ALL) TOKENS
   const amount = 1;
-  await market.connect(users[1]).buyMarketItem(2, amount,{ value: price });
-  await market.connect(users[1]).buyMarketItem(3, amount,{ value: price });
-  await market.connect(users[1]).buyMarketItem(4, amount,{ value: price });
+  await market.connect(users[1]).buyMarketItem(2, amount, { value: price });
+  await market.connect(users[1]).buyMarketItem(3, amount, { value: price });
+  await market.connect(users[1]).buyMarketItem(4, amount, { value: price });
 
   //FETCH UNSOLD ITEM LIST AGAIN
 };
 
 main()
-  .then(
-    async () =>
-      await verifyContract(
-        "MarketplaceV0__factory",
-        "ContractFactory1155",
-        "ERC1155PresetMinterPauser",
-      ),
-  )
+  .then(async () => await verifyContract("MarketplaceV0__factory", "ContractFactory1155", "ERC1155PresetMinterPauser"))
   .then(() => process.exit(0))
   .catch((error: Error) => {
     console.error(error);

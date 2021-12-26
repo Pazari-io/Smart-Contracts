@@ -41,29 +41,29 @@
  * leave this for a V2 though.
  */
 
- /**
-  * NOTE FOR DEVELOPERS:
-  * Rather than using a mapping to determine who is a developer, we should instead call the treasury contract
-  * and pull the list of developers from there. This will need to be changed when treasury contract is written.
-  * This way we can have more control over how developers are added or removed from the team, and can set
-  * multi-sig authorization for changes to the team so a bad actor can't interfere.
-  */
-  /**
-   * THE FOLLOWING FUNCTIONS HAVE BEEN MIGRATION TESTED AND FUNCTION CORRECTLY:
-   * - getPaymentRouteID
-   * - openPaymentRoute
-   * - pushTokensTest => _pushTokens
-   * - holdTokensTest => _holdTokens
-   * - pullTokens
-   * - closePaymentRoute
-   *
-   * THE FOLLOWING FUNCTIONS HAVE NOT BEEN TESTED:
-   * - _storeFailedTransfer
-   * - collectFailedTransfer
-   * - getMyPaymentRoutes
-   * - adjustRouteTax
-   * - adjustTaxBounds
-   */
+/**
+ * NOTE FOR DEVELOPERS:
+ * Rather than using a mapping to determine who is a developer, we should instead call the treasury contract
+ * and pull the list of developers from there. This will need to be changed when treasury contract is written.
+ * This way we can have more control over how developers are added or removed from the team, and can set
+ * multi-sig authorization for changes to the team so a bad actor can't interfere.
+ */
+/**
+ * THE FOLLOWING FUNCTIONS HAVE BEEN MIGRATION TESTED AND FUNCTION CORRECTLY:
+ * - getPaymentRouteID
+ * - openPaymentRoute
+ * - pushTokensTest => _pushTokens
+ * - holdTokensTest => _holdTokens
+ * - pullTokens
+ * - closePaymentRoute
+ *
+ * THE FOLLOWING FUNCTIONS HAVE NOT BEEN TESTED:
+ * - _storeFailedTransfer
+ * - collectFailedTransfer
+ * - getMyPaymentRoutes
+ * - adjustRouteTax
+ * - adjustTaxBounds
+ */
 
 /**
  * Version 0.1.1 Patch Notes:
@@ -82,7 +82,6 @@ import "../Dependencies/IERC20.sol";
 import "../Dependencies/ReentrancyGuard.sol";
 
 contract PaymentRouter is Context, ReentrancyGuard {
-
     // ****PAYMENT ROUTES****
 
     // Fires when a new payment route is created
@@ -145,12 +144,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
     // recipient address => token address => held tokens
     mapping(address => mapping(address => uint256)) failedTokens;
 
-
     // ****PULL FUNCTIONS****
 
     // Mapping for total balance of tokens that are currently being held by a payment route
     // route ID => token address => token balance
-    mapping (bytes32 => mapping(address => uint256)) internal routeTokenBalance;
+    mapping(bytes32 => mapping(address => uint256)) internal routeTokenBalance;
 
     // Mapping for amount of tokens that have been released from holding by a payment route
     // route ID => token address => amount released
@@ -158,14 +156,19 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // Mapping of tokens released from holding by recipient
     // recipient address => routeID => token address => amount released
-    mapping(address => mapping(bytes32 => mapping(address => uint256))) internal recipTokensReleased;
+    mapping(address => mapping(bytes32 => mapping(address => uint256)))
+        internal recipTokensReleased;
 
     // Fires when tokens are deposited into a payment route for holding
     event TokensHeld(bytes32 routeID, address tokenAddress, uint256 amount);
 
     // Fires when tokens are collected from holding by a recipient
-    event PaymentReleased(address indexed recipient, bytes32 routeID, address tokenAddress, uint256 amount);
-
+    event PaymentReleased(
+        address indexed recipient,
+        bytes32 routeID,
+        address tokenAddress,
+        uint256 amount
+    );
 
     // ****DEVELOPERS****
 
@@ -178,9 +181,14 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
     // For testing, just use accounts[0] (Truffle) for treasury and developers
     // ****LINK TO TREASURY CONTRACT, GRAB DEVELOPER LIST FROM THERE****
-    constructor(address _treasuryAddress, address[] memory _developers, uint16 _minTax, uint16 _maxTax){
+    constructor(
+        address _treasuryAddress,
+        address[] memory _developers,
+        uint16 _minTax,
+        uint16 _maxTax
+    ) {
         treasuryAddress = _treasuryAddress;
-        for (uint i = 0; i < _developers.length; i++){
+        for (uint256 i = 0; i < _developers.length; i++) {
             isDev[_developers[i]] = true;
         }
         minTax = _minTax;
@@ -196,7 +204,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
     }
 
     // ****REMOVE WHEN TREASURY CONTRACT READY, CHANGE MODIFIER TO FUNCTION CALL TO CHECK DEV STATUS****
-    modifier onlyDev {
+    modifier onlyDev() {
         require(isDev[msg.sender], "Only developers can access this function");
         _;
     }
@@ -222,7 +230,7 @@ contract PaymentRouter is Context, ReentrancyGuard {
 
         // Iterate through all entries submitted and check for upload errors
         uint16 totalCommissions;
-        for(uint i = 0; i < _recipients.length; i++){
+        for (uint256 i = 0; i < _recipients.length; i++) {
             totalCommissions += _commissions[i];
             require(totalCommissions <= 10000, "Commissions cannot add up to more than 100%");
             require(_recipients[i] != address(0), "Cannot burn tokens with payment router");
@@ -234,13 +242,21 @@ contract PaymentRouter is Context, ReentrancyGuard {
     }
 
     // ****DELETE BEFORE DEPLOYMENT****
-    function pushTokensTest(bytes32 _routeID, address _tokenAddress, uint256 _amount) external returns (bool){
+    function pushTokensTest(
+        bytes32 _routeID,
+        address _tokenAddress,
+        uint256 _amount
+    ) external returns (bool) {
         _pushTokens(_routeID, _tokenAddress, _amount);
         return true;
     }
 
     // ****DELETE BEFORE DEPLOYMENT****
-    function holdTokensTest(bytes32 _routeID, address _tokenAddress, uint256 _amount) external {
+    function holdTokensTest(
+        bytes32 _routeID,
+        address _tokenAddress,
+        uint256 _amount
+    ) external {
         _holdTokens(_routeID, _tokenAddress, _amount);
     }
 
@@ -264,13 +280,20 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * but keeping it on buyMarketItem() is necessary to prevent potential reentrant calls.
      *
      */
-    function _pushTokens(bytes32 _routeID, address _tokenAddress, uint256 _amount) internal returns (bool){
+    function _pushTokens(
+        bytes32 _routeID,
+        address _tokenAddress,
+        uint256 _amount
+    ) internal returns (bool) {
         require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
-        require(IERC20(_tokenAddress).allowance(_msgSender(), address(this)) >= _amount, "Insufficient allowance");
+        require(
+            IERC20(_tokenAddress).allowance(_msgSender(), address(this)) >= _amount,
+            "Insufficient allowance"
+        );
         require(routeTax[_routeID] >= minTax, "Minimum route tax not met, must raise tax");
 
         // Transfer route tax first
-        uint256 tax = _amount * routeTax[_routeID] / 10000;
+        uint256 tax = (_amount * routeTax[_routeID]) / 10000;
         uint256 totalAmount = _amount - tax; // Total amount to be transferred after tax
         IERC20(_tokenAddress).transferFrom(_msgSender(), treasuryAddress, tax);
 
@@ -279,12 +302,18 @@ contract PaymentRouter is Context, ReentrancyGuard {
         uint256 payment; // Individual recipient's payment
 
         // Transfer tokens from msg.sender to route.recipients[i]:
-        for (uint i = 0; i < route.commissions.length; i++) {
-            payment = totalAmount * route.commissions[i] / 10000;
+        for (uint256 i = 0; i < route.commissions.length; i++) {
+            payment = (totalAmount * route.commissions[i]) / 10000;
             // If transferFrom() fails:
-            if(!IERC20(_tokenAddress).transferFrom(_msgSender(), route.recipients[i], payment)){
+            if (!IERC20(_tokenAddress).transferFrom(_msgSender(), route.recipients[i], payment)) {
                 // Emit failure event alerting recipient they have tokens to collect
-                emit transferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
+                emit transferFailed(
+                    _msgSender(),
+                    _routeID,
+                    payment,
+                    block.timestamp,
+                    route.recipients[i]
+                );
                 // Store tokens in contract for holding until recipient collects them
                 _storeFailedTransfer(_tokenAddress, route.recipients[i], payment);
                 continue; // Continue to next recipient
@@ -292,7 +321,14 @@ contract PaymentRouter is Context, ReentrancyGuard {
         }
 
         // Emit a transferReceipt event to all recipients
-        emit transferReceipt(_msgSender(), _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
+        emit transferReceipt(
+            _msgSender(),
+            _routeID,
+            _tokenAddress,
+            totalAmount,
+            tax,
+            block.timestamp
+        );
         return true;
     }
 
@@ -307,9 +343,13 @@ contract PaymentRouter is Context, ReentrancyGuard {
      *
      * bug Using nonReentrant modifier causes buyMarketItem to revert, removed nonReentrant from _holdTokens
      */
-    function _holdTokens(bytes32 _routeID, address _tokenAddress, uint256 _amount) internal returns (bool) {
+    function _holdTokens(
+        bytes32 _routeID,
+        address _tokenAddress,
+        uint256 _amount
+    ) internal returns (bool) {
         // Calculate treasury's commission from _amount
-        uint256 treasuryCommission = _amount * minTax / 10000;
+        uint256 treasuryCommission = (_amount * minTax) / 10000;
 
         // Increase payment route's token balance by _amount - treasuryCommission
         routeTokenBalance[_routeID][_tokenAddress] += _amount - treasuryCommission;
@@ -326,12 +366,16 @@ contract PaymentRouter is Context, ReentrancyGuard {
     }
 
     // Stores tokens that failed the push-transfer operation
-    function _storeFailedTransfer(address _tokenAddress, address _recipient, uint256 _amount) internal {
+    function _storeFailedTransfer(
+        address _tokenAddress,
+        address _recipient,
+        uint256 _amount
+    ) internal {
         failedTokens[_recipient][_tokenAddress] += _amount;
     }
 
     // Collects tokens that failed the push-transfer operation
-    function collectFailedTransfer(address _tokenAddress) external nonReentrant() returns (bool) {
+    function collectFailedTransfer(address _tokenAddress) external nonReentrant returns (bool) {
         uint256 amount;
         amount = failedTokens[_msgSender()][_tokenAddress];
         require(IERC20(_tokenAddress).transfer(_msgSender(), amount), "Transfer failed!");
@@ -358,13 +402,17 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * desired functionality--the only difference is the use of mappings to assign routeIDs a token balance
      * and for users to collect what they own from each routeID.
      */
-    function pullTokens(bytes32 _routeID, address _tokenAddress) external nonReentrant() returns (bool) {
+    function pullTokens(bytes32 _routeID, address _tokenAddress)
+        external
+        nonReentrant
+        returns (bool)
+    {
         uint16 commission; // Commission rate for recipient
         address recipient; // Recipient pulling tokens
 
         // Loop through PaymentRoute recipients to find msg.sender's address and their respective commission rate
-        for (uint i = 0; i < paymentRouteID[_routeID].recipients.length; i++) {
-            if(paymentRouteID[_routeID].recipients[i] == msg.sender){
+        for (uint256 i = 0; i < paymentRouteID[_routeID].recipients.length; i++) {
+            if (paymentRouteID[_routeID].recipients[i] == msg.sender) {
                 recipient = paymentRouteID[_routeID].recipients[i];
                 commission = paymentRouteID[_routeID].commissions[i];
             }
@@ -372,10 +420,13 @@ contract PaymentRouter is Context, ReentrancyGuard {
         require(recipient != address(0) && commission != 0, "Recipient not found!");
 
         // The route's current token balance combined with the total amount it has released
-        uint256 totalReceived = routeTokenBalance[_routeID][_tokenAddress] + routeTokensReleased[_routeID][_tokenAddress];
+        uint256 totalReceived = routeTokenBalance[_routeID][_tokenAddress] +
+            routeTokensReleased[_routeID][_tokenAddress];
 
         // Recipient's due payment
-        uint256 payment = totalReceived * commission / 10000 - recipTokensReleased[recipient][_routeID][_tokenAddress];
+        uint256 payment = (totalReceived * commission) /
+            10000 -
+            recipTokensReleased[recipient][_routeID][_tokenAddress];
 
         require(payment != 0, "Recipient is not due payment");
 
@@ -405,22 +456,20 @@ contract PaymentRouter is Context, ReentrancyGuard {
     function openPaymentRoute(
         address[] memory _recipients,
         uint16[] memory _commissions,
-        uint16 _routeTax)
-        external
-        newRouteChecks(_recipients, _commissions)
-        returns (bytes32 routeID) {
-            // Creates routeID from hashing contents of new PaymentRoute
-            routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
+        uint16 _routeTax
+    ) external newRouteChecks(_recipients, _commissions) returns (bytes32 routeID) {
+        // Creates routeID from hashing contents of new PaymentRoute
+        routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
 
-            // Maps the routeID to the new PaymentRoute
-            paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, true);
+        // Maps the routeID to the new PaymentRoute
+        paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, true);
 
-            // Maps the routeID to the address that created it
-            creatorRoutes[_msgSender()].push(routeID);
+        // Maps the routeID to the address that created it
+        creatorRoutes[_msgSender()].push(routeID);
 
-            routeTax[routeID] = _routeTax;
+        routeTax[routeID] = _routeTax;
 
-            emit routeCreated(msg.sender, routeID, _recipients, _commissions);
+        emit routeCreated(msg.sender, routeID, _recipients, _commissions);
     }
 
     /**
@@ -441,9 +490,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * obscures the order in which routes were created. Every creator has a list of routes they created
      * as well, making it even less likely that funds will be sent the wrong way.
      */
-    function getPaymentRouteID(address _routeCreator, address[] memory _recipients, uint16[] memory _commissions)
-         public pure
-         returns(bytes32 routeID) {
+    function getPaymentRouteID(
+        address _routeCreator,
+        address[] memory _recipients,
+        uint16[] memory _commissions
+    ) public pure returns (bytes32 routeID) {
         routeID = keccak256(abi.encodePacked(_routeCreator, _recipients, _commissions));
     }
 
@@ -465,7 +516,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * idea If a route creator chooses 100% tax then they become a "sponsor" of the platform
      * and receive huge promotional boosts for the items tied to the route.
      */
-    function adjustRouteTax(bytes32 _routeID, uint16 _newTax) external onlyCreator(_routeID) returns (bool) {
+    function adjustRouteTax(bytes32 _routeID, uint16 _newTax)
+        external
+        onlyCreator(_routeID)
+        returns (bool)
+    {
         require(_newTax >= minTax, "Minimum tax not met");
         require(_newTax <= maxTax, "Maximum tax exceeded");
 
@@ -482,12 +537,11 @@ contract PaymentRouter is Context, ReentrancyGuard {
      * can restrict sales of items that don't update their route tax if we increase the minTax.
      * This way developers can't sneakily raise taxes on creators without them knowing.
      */
-    function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev() {
+    function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev {
         require(_minTax >= 0, "Minimum tax < 0.00%");
         require(_maxTax <= 10000, "Maximum tax > 100.00%");
 
         minTax = _minTax;
         maxTax = _maxTax;
     }
-
 }

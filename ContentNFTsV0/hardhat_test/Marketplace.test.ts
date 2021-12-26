@@ -46,10 +46,7 @@ describe("Marketplace", () => {
       const token = IERC1155__factory.connect(contractAddr, accounts[0]);
 
       expect(contractAddr).to.not.eq(ethers.constants.AddressZero, "Contract address is not set");
-      expect(await token.balanceOf(accounts[0].address, 1)).to.eq(
-        0,
-        "Shouldn't have any balance to start",
-      );
+      expect(await token.balanceOf(accounts[0].address, 1)).to.eq(0, "Shouldn't have any balance to start");
     });
 
     it("can mint", async () => {
@@ -98,10 +95,7 @@ describe("Marketplace", () => {
       const item = items[0];
 
       expect(item.itemID).to.eq(itemID, "Item should be created successfully itemId");
-      expect(item.nftContract).to.eq(
-        nftContract,
-        "Item should be created successfully nftContract",
-      );
+      expect(item.nftContract).to.eq(nftContract, "Item should be created successfully nftContract");
       expect(item.tokenID).to.eq(tokenID, "Item should be created successfully tokenId");
       expect(item.seller).to.eq(seller.address, "Item should be created successfully seller");
       expect(item.price).to.eq(price, "Item should be created successfully price");
@@ -110,30 +104,22 @@ describe("Marketplace", () => {
 
     it("cannot create duplicate marketplace item for same token", async () => {
       const nftContract = token.address;
-      await expect(
-        marketplace.createMarketItem(nftContract, tokenID, price, amount),
-      ).to.be.reverted;
+      await expect(marketplace.createMarketItem(nftContract, tokenID, price, amount)).to.be.reverted;
     });
 
     it("cannot create free items", async () => {
       const nftContract = token.address;
-      await expect(
-        marketplace.createMarketItem(nftContract, tokenID, 0, amount),
-      ).to.be.reverted;
+      await expect(marketplace.createMarketItem(nftContract, tokenID, 0, amount)).to.be.reverted;
     });
 
     it("cannot create item for non existing token", async () => {
       const nftContract = token.address;
-      await expect(
-        marketplace.createMarketItem(nftContract, 123, 0, amount),
-      ).to.be.reverted;
+      await expect(marketplace.createMarketItem(nftContract, 123, 0, amount)).to.be.reverted;
     });
 
     it("cannot create items when not enough tokens", async () => {
       const nftContract = token.address;
-      await expect(
-        marketplace.createMarketItem(nftContract, tokenID, price, amount + 1)
-      ).to.be.reverted;
+      await expect(marketplace.createMarketItem(nftContract, tokenID, price, amount + 1)).to.be.reverted;
     });
   });
 
@@ -159,17 +145,17 @@ describe("Marketplace", () => {
       const itemsPre = await marketplace.fetchMarketItems();
       const itemPre = itemsPre[0];
       await marketplace.connect(accounts[1]).buyMarketItem(itemID, amountSell, {
-        value: price.mul(amountSell)
+        value: price.mul(amountSell),
       });
       // let nftContract = token.address;
       //  initialBalance0 = await web3.eth.getBalance(accounts[0]);
       const items = await marketplace.fetchMarketItems();
       const item = items[0];
 
-      expect(item.itemID).to.eq( itemID, "Item should be created successfully itemId");
-      expect(item.tokenID).to.eq( tokenID, "Item should be created successfully tokenId");
+      expect(item.itemID).to.eq(itemID, "Item should be created successfully itemId");
+      expect(item.tokenID).to.eq(tokenID, "Item should be created successfully tokenId");
       expect(item.seller).to.eq(seller.address, "Item should be created successfully seller");
-      expect(item.price,).to.eq(price, "Item should be created successfully price");
+      expect(item.price).to.eq(price, "Item should be created successfully price");
       expect(item.amount).to.eq(itemPre.amount.sub(amountSell), "Should have less items for sale after buying");
 
       const balance = await token.balanceOf(accounts[1].address, 1);
@@ -177,15 +163,11 @@ describe("Marketplace", () => {
     });
 
     it("cannot buy more items than for sale", async () => {
-      await expect(
-        marketplace.connect(accounts[1]).buyMarketItem(itemID, 100, { value: price }),
-      ).to.be.reverted;
+      await expect(marketplace.connect(accounts[1]).buyMarketItem(itemID, 100, { value: price })).to.be.reverted;
     });
 
     it("cannot buy non-existing item", async () => {
-      await expect(
-        marketplace.connect(accounts[1]).buyMarketItem(123, amountSell, { value: price }),
-      ).to.be.reverted;
+      await expect(marketplace.connect(accounts[1]).buyMarketItem(123, amountSell, { value: price })).to.be.reverted;
     });
 
     it("cannot buy if you are the seller", async () => {
@@ -197,9 +179,7 @@ describe("Marketplace", () => {
     });
 
     it("cannot buy if insuffient funds", async () => {
-      await expect(
-        marketplace.connect(accounts[1]).buyMarketItem(itemID, amountSell, { value: price }),
-      ).to.be.reverted;
+      await expect(marketplace.connect(accounts[1]).buyMarketItem(itemID, amountSell, { value: price })).to.be.reverted;
     });
 
     it("can buy all items", async () => {
@@ -219,9 +199,7 @@ describe("Marketplace", () => {
     });
 
     it("cannot buy when sold out", async () => {
-      await expect(
-        marketplace.connect(accounts[1]).buyMarketItem(itemID, 1, { value: price }),
-      ).to.be.reverted;
+      await expect(marketplace.connect(accounts[1]).buyMarketItem(itemID, 1, { value: price })).to.be.reverted;
     });
   });
 });
