@@ -326,10 +326,7 @@ contract PaymentRouter is Context {
      * desired functionality--the only difference is the use of mappings to assign routeIDs a token balance
      * and for users to collect what they own from each routeID.
      */
-    function pullTokens(bytes32 _routeID, address _tokenAddress)
-        external
-        returns (bool)
-    {
+    function pullTokens(bytes32 _routeID, address _tokenAddress) external returns (bool) {
         uint16 commission; // Commission rate for recipient
         address recipient; // Recipient pulling tokens
 
