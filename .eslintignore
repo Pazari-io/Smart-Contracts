@@ -13,6 +13,7 @@
 **/export
 **/deployments
 **/typechain
+**/out
 
 # files
 *.env

@@ -6,6 +6,8 @@
 **/node_modules
 **/package.json
 **/types
+**/out
+**/build
 
 # directories
 .yarn/

@@ -26,7 +26,7 @@ jobs:
           skipPush: true
           signingKey: ""
       - name: install
-        run: nix-env -f https://github.com/dapphub/dapptools/archive/master.tar.gz -iA solc-static-versions.solc_0_7_5
+        run: nix-env -f https://github.com/dapphub/dapptools/archive/master.tar.gz -iA solc-static-versions.solc_0_8_9
       - name: test
         run: nix-shell --pure --command "export LANG=C.UTF-8 ; dapp test"
 
