@@ -34,7 +34,7 @@ contract MarketplaceGetters is Marketplace {
         address[] memory _developers,
         uint16 _minTax,
         uint16 _maxTax
-    ) PaymentRouter(_treasuryAddress, _developers, _minTax, _maxTax) {
+    ) Marketplace (_treasuryAddress, _developers, _minTax, _maxTax) {
         super;
     }
 
