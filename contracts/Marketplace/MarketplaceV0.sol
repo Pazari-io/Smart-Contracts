@@ -148,7 +148,7 @@ contract MarketplaceV0 is ReentrancyGuard {
          * note: When payment splitter is implemented, I will replace this
          * operation with a function call to payment splitter with value attached.
          */
-        (bool success, ) = seller.call{ value: price }("");
+        (bool success, ) = seller.call{value: price}("");
         require(success, "Transfer failed.");
 
         // Call token contract and transfer token from seller to buyer
