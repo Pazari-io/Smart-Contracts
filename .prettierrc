@@ -12,7 +12,8 @@
         "printWidth": 100,
         "tabWidth": 4,
         "explicitTypes": "always",
-        "singleQuote": false
+        "singleQuote": false,
+        "bracketSpacing": false
       }
     }
   ],

@@ -70,7 +70,7 @@ contract DSTestExtended is DSTest {
         uint256 value,
         string memory message
     ) internal {
-        try erroringFunction{ value: value }(param) {
+        try erroringFunction{value: value}(param) {
             fail();
         } catch Error(string memory error) {
             // Assert revert error matches expected message
