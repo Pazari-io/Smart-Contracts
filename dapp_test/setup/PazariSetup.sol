@@ -2,14 +2,13 @@
 pragma solidity ^0.8.0;
 
 /* Import lib */
-import "ds-test/test.sol";
 import "./Users.sol";
 import "../utils/Hevm.sol";
 import "../utils/MockContract.sol";
 import "../utils/DSTestExtended.sol";
 
 /* Import contracts */
-import { MarketplaceGetters } from "contracts/Marketplace/MarketplaceGetters.sol";
+import {Marketplace} from "contracts/Marketplace/Marketplace.sol";
 
 //solhint-disable state-visibility
 contract PazariSetup is DSTestExtended {

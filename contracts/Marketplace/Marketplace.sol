@@ -5,7 +5,7 @@ import "../Dependencies/Counters.sol";
 import "../Dependencies/IERC20Metadata.sol";
 import "../Dependencies/ERC1155Holder.sol";
 import "../Dependencies/IERC1155.sol";
-import { PaymentRouter } from "../PaymentRouter/PaymentRouter.sol";
+import {PaymentRouter} from "../PaymentRouter/PaymentRouter.sol";
 
 contract Marketplace is PaymentRouter {
     using Counters for Counters.Counter;
