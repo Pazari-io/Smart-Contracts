@@ -2,10 +2,10 @@ import { ERC1155PresetMinterPauser__factory } from "../../types";
 import { MacroChain, verifyContract } from "../../utils";
 
 const main = async () => {
-  const { deployer } = await MacroChain.init();
+  const { deploy } = await MacroChain.init();
 
   //Deploy token
-  await deployer<ERC1155PresetMinterPauser__factory>("ERC1155PresetMinterPauser");
+  await deploy(ERC1155PresetMinterPauser__factory);
 };
 
 main()

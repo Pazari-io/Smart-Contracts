@@ -1,11 +1,12 @@
 import { ethers } from "hardhat";
 
+//eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function advanceBlock(): Promise<any> {
   return ethers.provider.send("evm_mine", []);
 }
 
 export async function advanceBlockTo(blockNumber: number): Promise<void> {
-  let now = (await ethers.provider.getBlockNumber()).toString();
+  const now = (await ethers.provider.getBlockNumber()).toString();
   for (let i = parseInt(now); i < blockNumber; i++) {
     await advanceBlock();
   }

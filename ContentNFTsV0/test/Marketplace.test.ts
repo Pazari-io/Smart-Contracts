@@ -29,10 +29,10 @@ describe("Marketplace", () => {
   });
 
   before(async () => {
-    const { deployer } = macrochain;
-    marketplace = await deployer<MarketplaceV0__factory>("MarketplaceV0");
-    token = await deployer<ERC1155PresetMinterPauser__factory>("ERC1155PresetMinterPauser");
-    contractFactory = await deployer<ContractFactory1155__factory>("ContractFactory1155");
+    const { deploy } = macrochain;
+    marketplace = await deploy(MarketplaceV0__factory);
+    token = await deploy(ERC1155PresetMinterPauser__factory);
+    contractFactory = await deploy(ContractFactory1155__factory);
   });
 
   describe("test erc115 setup", () => {

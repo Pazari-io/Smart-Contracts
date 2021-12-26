@@ -6,12 +6,12 @@ import {
 import { MacroChain, verifyContract } from "../../utils";
 
 const main = async () => {
-  const { deployer, users } = await MacroChain.init();
+  const { deploy, users } = await MacroChain.init();
 
   //Deploy marketplace?
-  let market = await deployer<MarketplaceV0__factory>("MarketplaceV0__factory");
-  const factory = await deployer<ContractFactory1155__factory>("ContractFactory1155");
-  const token = await deployer<ERC1155PresetMinterPauser__factory>("ERC1155PresetMinterPauser");
+  const market = await deploy(MarketplaceV0__factory);
+  const factory = await deploy(ContractFactory1155__factory);
+  const token = await deploy(ERC1155PresetMinterPauser__factory);
 
   //DO IT AGAIN, BUT THIS TIME ADD MORE TOKENS TO CREATE A BIGGER LIST
   //Make sure unsold item list updates properly when many, but not all,
