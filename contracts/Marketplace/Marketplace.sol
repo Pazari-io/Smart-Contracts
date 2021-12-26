@@ -7,7 +7,7 @@ import "../Dependencies/ERC1155Holder.sol";
 import "../Dependencies/IERC1155.sol";
 import {PaymentRouter} from "../PaymentRouter/PaymentRouter.sol";
 
-contract Marketplace is PaymentRouter {
+contract Marketplace is PaymentRouter, ERC1155Holder {
     using Counters for Counters.Counter;
     // These counters are used by getInStockItems()
     Counters.Counter internal itemIDs; // Counter for MarketItem IDs
