@@ -1,3 +1,4 @@
+// Version 0.2.0
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -21,7 +22,7 @@ contract PaymentRouter is Context {
 
     // Tax rate paid by a route
     // route ID => tax rate
-    mapping(bytes32 => uint16) public routeTax;
+    //mapping(bytes32 => uint16) public routeTax;
 
     // Min and max tax rates that routes must meet
     uint16 public minTax;
@@ -40,6 +41,7 @@ contract PaymentRouter is Context {
         address routeCreator; // Address of payment route creator
         address[] recipients; // Recipients in this payment route
         uint16[] commissions; // Commissions for each recipient--in fractions of 10000
+        uint16 routeTax; // Tax paid by this route
         bool isActive; // Is route currently active?
     }
 
@@ -56,7 +58,7 @@ contract PaymentRouter is Context {
     );
 
     // Fires when a push-transfer operation fails
-    event TransferReceipt(
+    event TransferFailed(
         address indexed sender,
         bytes32 routeID,
         uint256 payment,
@@ -139,8 +141,8 @@ contract PaymentRouter is Context {
      * Requirements to pass this modifier:
      * - _recipients and _commissions arrays must be same length
      * - No recipient is address(0)
-     * - Commissions are greater than 0% but less than 97%
-     * - All commissions add up to 100%
+     * - Commissions are greater than 0% but less than 100%
+     * - All commissions add up to exactly 100%
      *
      * note The only reason I didn't include this inside the openPaymentRoute function
      * is because the checks make the function harder to read. It's better to keep them
@@ -149,12 +151,12 @@ contract PaymentRouter is Context {
      */
     modifier newRouteChecks(address[] memory _recipients, uint16[] memory _commissions) {
         // Check for front-end errors
-        //require(_recipients[0] == treasuryAddress && _commissions[0] == 300, "Must include platform tax");
         require(_recipients.length == _commissions.length, "Array lengths must match");
+        require(_recipients.length <= 256, "Max recipients exceeded");
 
         // Iterate through all entries submitted and check for upload errors
         uint16 totalCommissions;
-        for (uint256 i = 0; i < _recipients.length; i++) {
+        for (uint8 i = 0; i < _recipients.length; i++) {
             totalCommissions += _commissions[i];
             require(totalCommissions <= 10000, "Commissions cannot add up to more than 100%");
             require(_recipients[i] != address(0), "Cannot burn tokens with payment router");
@@ -185,9 +187,38 @@ contract PaymentRouter is Context {
     }
 
     /**
+     * @dev Checks that the routeTax conforms to required bounds. If routeTax is less
+     * than minTax or greater than maxTax then routeTax is updated to minTax or maxTax,
+     * depending on which one is triggered by the modifier. This modifier is used by
+     * _pushTokens() and _holdTokens() when a payment is made to auto-adjust the 
+     * routeTax if the developers change it.
+     *
+     * If routeTax is less than minTax, then routeTax is set to minTax. If routeTax is
+     * greater than maxTax, then routeTax is set to maxTax. This way, routeTax only 
+     * goes up if we increase the minTax, and routeTax only goes down if the route is
+     * paying the maxTax and we decrease the maxTax.
+     *
+     * The only situation this does not cover is when maxTax is raised or minTax is
+     * reduced.
+     */
+    modifier checkRouteTax(bytes32 _routeID) {
+        PaymentRoute memory route = paymentRouteID[_routeID];
+
+        // If routeTax doesn't meet minTax/maxTax requirements, then it is updated
+        if(route.routeTax < minTax) {
+            route.routeTax = minTax;
+        }
+        // Only sponsored items pay maxTax
+        if(route.routeTax > maxTax) {
+            route.routeTax = maxTax;
+        }
+        _;
+    }
+
+    /**
      * @dev Internal function to transfer tokens from msg.sender to all recipients[].
      * The size of each payment is determined by commissions[i]/10000, which added up
-     * will always equal 10000. The first 300 units are transferred to the treasury. This
+     * will always equal 10000. The first minTax units are transferred to the treasury. This
      * function is a push design that will incur higher gas costs on the user, but
      * is more convenient for the creators.
      *
@@ -203,35 +234,48 @@ contract PaymentRouter is Context {
      * nonReentrant. Since _pushTokens() is an internal function, it doesn't make sense to use nonReentrant,
      * but keeping it on buyMarketItem() is necessary to prevent potential reentrant calls.
      *
+     * Patch Notes: 0.1.2
+     * changed This function was throwing a VM error. This error was fixed by transferring _amount
+     * to the contract via transferFrom(), and then using transfer() to perform the micro-transfers.
+     *
+     * changed Transfer failure event was renamed to TransferReceipt at some point, so I changed it
+     * back to TransferFailed to differentiate between the failure event(s) and the success receipt.
+     *
+     * changed Defined local variable "route" earlier in function, simplifies syntax
      */
     function _pushTokens(
         bytes32 _routeID,
         address _tokenAddress,
         uint256 _amount
-    ) internal returns (bool) {
+    ) internal checkRouteTax(_routeID) returns (bool) {
         require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
         require(
             IERC20(_tokenAddress).allowance(_msgSender(), address(this)) >= _amount,
             "Insufficient allowance"
         );
-        require(routeTax[_routeID] >= minTax, "Minimum route tax not met, must raise tax");
+        
+        // Let's make this simpler to access
+        PaymentRoute memory route = paymentRouteID[_routeID];
+        
+        // Transfer full _amount from buyer to contract
+        IERC20(_tokenAddress).transferFrom(_msgSender(), address(this), _amount);
 
         // Transfer route tax first
-        uint256 tax = (_amount * routeTax[_routeID]) / 10000;
+        uint256 tax = (_amount * route.routeTax) / 10000;
         uint256 totalAmount = _amount - tax; // Total amount to be transferred after tax
-        IERC20(_tokenAddress).transferFrom(_msgSender(), treasuryAddress, tax);
+        IERC20(_tokenAddress).transfer(treasuryAddress, tax);
 
         // Now transfer the commissions
-        PaymentRoute memory route = paymentRouteID[_routeID];
         uint256 payment; // Individual recipient's payment
 
-        // Transfer tokens from msg.sender to route.recipients[i]:
+        // Transfer tokens from contract to route.recipients[i]:
         for (uint256 i = 0; i < route.commissions.length; i++) {
             payment = (totalAmount * route.commissions[i]) / 10000;
             // If transferFrom() fails:
-            if (!IERC20(_tokenAddress).transferFrom(_msgSender(), route.recipients[i], payment)) {
+            if (!IERC20(_tokenAddress).transfer(route.recipients[i], payment)) {
                 // Emit failure event alerting recipient they have tokens to collect
-                emit TransferReceipt(
+                // If we want to slim down on events, then use tokensHeld event instead
+                emit TransferFailed(
                     _msgSender(),
                     _routeID,
                     payment,
@@ -271,18 +315,18 @@ contract PaymentRouter is Context {
         bytes32 _routeID,
         address _tokenAddress,
         uint256 _amount
-    ) internal returns (bool) {
+    ) internal checkRouteTax(_routeID) returns (bool) {
         // Calculate treasury's commission from _amount
-        uint256 treasuryCommission = (_amount * minTax) / 10000;
+        uint256 tax = (_amount * paymentRouteID[_routeID].routeTax) / 10000;
 
-        // Increase payment route's token balance by _amount - treasuryCommission
-        routeTokenBalance[_routeID][_tokenAddress] += _amount - treasuryCommission;
+        // Increase payment route's token balance by _amount - tax
+        routeTokenBalance[_routeID][_tokenAddress] += _amount - tax;
 
         // Transfer tokens from buyer to this contract
         IERC20(_tokenAddress).transferFrom(_msgSender(), address(this), _amount);
 
         // Transfer treasury's commission from this contract to treasury contract
-        IERC20(_tokenAddress).transfer(treasuryAddress, treasuryCommission);
+        IERC20(_tokenAddress).transfer(treasuryAddress, tax);
 
         // Fire event alerting recipients they have tokens to collect
         emit TokensHeld(_routeID, _tokenAddress, _amount);
@@ -307,6 +351,10 @@ contract PaymentRouter is Context {
         assert(failedTokens[_msgSender()][_tokenAddress] == 0);
         return true;
     }
+    
+    // Maps a recipient's array index value to the routeID and their address
+     // routeID => recipient address => array index
+    mapping(bytes32 => mapping(address => uint8)) recipIndex;
 
     /**
      * @dev Function for pulling held tokens to recipient
@@ -329,14 +377,11 @@ contract PaymentRouter is Context {
     function pullTokens(bytes32 _routeID, address _tokenAddress) external returns (bool) {
         uint16 commission; // Commission rate for recipient
         address recipient; // Recipient pulling tokens
+        uint8 recipIndex_ = recipIndex[_routeID][_msgSender()]; // PaymentRoute array index for recipient
 
-        // Loop through PaymentRoute recipients to find msg.sender's address and their respective commission rate
-        for (uint256 i = 0; i < paymentRouteID[_routeID].recipients.length; i++) {
-            if (paymentRouteID[_routeID].recipients[i] == msg.sender) {
-                recipient = paymentRouteID[_routeID].recipients[i];
-                commission = paymentRouteID[_routeID].commissions[i];
-            }
-        }
+        recipient = paymentRouteID[_routeID].recipients[recipIndex_];
+        commission = paymentRouteID[_routeID].commissions[recipIndex_];
+         
         require(recipient != address(0) && commission != 0, "Recipient not found!");
 
         // The route's current token balance combined with the total amount it has released
@@ -382,12 +427,15 @@ contract PaymentRouter is Context {
         routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
 
         // Maps the routeID to the new PaymentRoute
-        paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, true);
+        paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, _routeTax, true);
 
-        // Maps the routeID to the address that created it
+        // Maps the routeID to the address that created it, and pushes to creator's routes array
         creatorRoutes[_msgSender()].push(routeID);
 
-        routeTax[routeID] = _routeTax;
+        // Assign recipIndex mapping values
+        for(uint8 i = 0; i < _recipients.length; i++) {
+            recipIndex[routeID][_recipients[i]] = i;
+        }
 
         emit RouteCreated(msg.sender, routeID, _recipients, _commissions);
     }
@@ -433,8 +481,8 @@ contract PaymentRouter is Context {
      * If a route creator chooses to pay a higher tax, then the platform's search algorithm will
      * place items tied to that route higher on the search results.
      *
-     * idea If a route creator chooses 100% tax then they become a "sponsor" of the platform
-     * and receive huge promotional boosts for the items tied to the route.
+     * idea If a route creator chooses maxTax then they become a "sponsor" of the platform
+     * and receive promotional boosts for the items tied to the route.
      */
     function adjustRouteTax(bytes32 _routeID, uint16 _newTax)
         external
@@ -444,7 +492,8 @@ contract PaymentRouter is Context {
         require(_newTax >= minTax, "Minimum tax not met");
         require(_newTax <= maxTax, "Maximum tax exceeded");
 
-        routeTax[_routeID] = _newTax;
+        paymentRouteID[_routeID].routeTax = _newTax;
+        // Emit event so all recipients can be notified of the routeTax change
         emit RouteTaxChanged(_routeID, _newTax);
         return true;
     }
@@ -452,10 +501,8 @@ contract PaymentRouter is Context {
     /**
      * @dev This function allows us to set the min/max tax bounds that can be set by a creator
      *
-     * note This does NOT update payment route taxes that are already applied! We would need to
-     * alert creators of any changes to the tax bounds, and have them change their route tax. We
-     * can restrict sales of items that don't update their route tax if we increase the minTax.
-     * This way developers can't sneakily raise taxes on creators without them knowing.
+     * note As of version 0.1.2 all route taxes will be automatically updated at the moment of
+     * purchase if they do not meet the bounds.
      */
     function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev {
         require(_minTax >= 0, "Minimum tax < 0.00%");
