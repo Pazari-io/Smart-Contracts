@@ -1,0 +1,21 @@
+{
+  "printWidth": 120,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "singleQuote": false,
+  "endOfLine": "auto",
+  "bracketSpacing": true,
+  "overrides": [
+    {
+      "files": "*.sol",
+      "options": {
+        "printWidth": 100,
+        "tabWidth": 4,
+        "explicitTypes": "always",
+        "singleQuote": false,
+        "bracketSpacing": false
+      }
+    }
+  ],
+  "plugins": ["prettier-plugin-solidity"]
+}
