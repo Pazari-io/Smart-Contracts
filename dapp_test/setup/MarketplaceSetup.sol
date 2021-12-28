@@ -6,13 +6,13 @@ import "../utils/Hevm.sol";
 import "../utils/MockContract.sol";
 import "../utils/DSTestExtended.sol";
 
-import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "contracts/Dependencies/ERC721Holder.sol";
+import "contracts/Dependencies/ERC1155Holder.sol";
 
 /* Import contracts */
 import {Marketplace} from "contracts/Marketplace/Marketplace.sol";
 import {ERC1155PresetMinterPauser} from "contracts/Dependencies/ERC1155PresetMinterPauser.sol";
-import {ERC20PresetMinterPauser} from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
+import {ERC20PresetMinterPauser} from "contracts/Dependencies/ERC20PresetMinterPauser.sol";
 
 contract NFTHolder is ERC721Holder, ERC1155Holder {}
 
