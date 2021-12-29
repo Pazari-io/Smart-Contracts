@@ -38,7 +38,7 @@ contract FactoryProxy is FactoryStorage {
     currentAddress = _newAddress;
     allPreviousAddresses.push(previousStableAddress);
 
-    emit contractUpgraded(_newAddress);
+    emit ContractUpgraded(_newAddress);
     paused = true;
   }
 
@@ -48,12 +48,12 @@ contract FactoryProxy is FactoryStorage {
   function acceptUpgrade(bool isAccepted) external onlyDAO {
     if (isAccepted) {
       paused = false;
-      emit contractAccepted(true, currentAddress);
+      emit ContractAccepted(true, currentAddress);
     }
     if (!isAccepted) {
       currentAddress = previousStableAddress;
       paused = false;
-      emit contractAccepted(false, currentAddress);
+      emit ContractAccepted(false, currentAddress);
     }
   }
 
