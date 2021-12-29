@@ -7,8 +7,11 @@ module.exports = async function (deployer, network, accounts) {
   let seller = accounts[1];
   let treasury = accounts[4];
 
-  await deployer.deploy(Marketplace, treasury, [seller], 300, 10000);
-  await deployer.deploy(ERC20, "TestCoin", "TST", web3.utils.toWei("200"), { from: buyer });
+  await deployer.deploy(Marketplace, treasury, [seller], 300, 10000, {
+    gas: 4700000,
+    gasPrice: 8000000000
+  });
+  await deployer.deploy(ERC20, "TestCoin", "TST", { from: buyer });
   await deployer.deploy(ERC1155PresetMinterPauser);
 
   //let router = await PaymentRouter.deployed();
@@ -134,12 +137,12 @@ module.exports = async function (deployer, network, accounts) {
   console.log(marketItems[1]);
 
   //BUY TOKEN
-  let allowance = payToken.allowance(buyer, market.address);
-  console.log("Checking payToken allowance: " + web3.utils.fromWei(await allowance));
-  console.log("Running buyMarketItem() for itemID 1:");
-  await market.buyMarketItem(itemID, amountBuy, { from: buyer });
-  console.log("Running buyMarketItem() for itemID 2:");
-  await market.buyMarketItem(itemID2, amountBuy2, { from: buyer });
+  // let allowance = payToken.allowance(buyer, market.address);
+  // console.log("Checking payToken allowance: " + web3.utils.fromWei(await allowance));
+  // console.log("Running buyMarketItem() for itemID 1:");
+  // await market.buyMarketItem(itemID, amountBuy, { from: buyer });
+  // console.log("Running buyMarketItem() for itemID 2:");
+  // await market.buyMarketItem(itemID2, amountBuy2, { from: buyer });
 
   //FETCH UNSOLD ITEM LIST AGAIN, MAKE SURE IT CLEARS CORRECTLY
   console.log("Running getItemsForSale():");
@@ -167,15 +170,17 @@ module.exports = async function (deployer, network, accounts) {
   console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[3])));
   console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[4])));
   console.log("Pulling tokens from pullTokens():");
-  await market.pullTokens(routeID, payToken.address, { from: recipients[0] });
-  await market.pullTokens(routeID, payToken.address, { from: recipients[1] });
-  await market.pullTokens(routeID, payToken.address, { from: recipients[2] });
-  console.log("Checking payToken balances: (buyer: accounts[0], seller: accounts[1])");
-  console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[0])));
-  console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[1])));
-  console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[2])));
-  console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[3])));
-  console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[4])));
+  // await market.pullTokens(routeID, payToken.address, { from: recipients[0] });
+  // await market.pullTokens(routeID, payToken.address, { from: recipients[1] });
+  // await market.pullTokens(routeID, payToken.address, { from: recipients[2] });
+  // console.log("Checking payToken balances: (buyer: accounts[0], seller: accounts[1])");
+  // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[0])));
+  // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[1])));
+  // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[2])));
+  // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[3])));
+  // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[4])));
+
+
 
   /*
 
