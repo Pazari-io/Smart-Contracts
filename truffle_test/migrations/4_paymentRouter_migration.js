@@ -9,7 +9,7 @@ module.exports = async function (deployer, network, accounts) {
 
   await deployer.deploy(Marketplace, treasury, [seller], 300, 10000, {
     gas: 4700000,
-    gasPrice: 8000000000
+    gasPrice: 8000000000,
   });
   await deployer.deploy(ERC20, "TestCoin", "TST", { from: buyer });
   await deployer.deploy(ERC1155PresetMinterPauser);
@@ -179,8 +179,6 @@ module.exports = async function (deployer, network, accounts) {
   // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[2])));
   // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[3])));
   // console.log(web3.utils.fromWei(await payToken.balanceOf(accounts[4])));
-
-
 
   /*
 
