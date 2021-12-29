@@ -15,16 +15,16 @@ pragma solidity ^0.8.0;
 
 contract FactoryStorage {
   // Fires when a new contract is created;
-  event contractCreated(address creatorAddress, address contractAddress, uint256 contractID);
+  event ContractCreated(address creatorAddress, address contractAddress, uint256 contractID);
 
   // Fires when an upgrade has successfully passed;
-  event contractUpgraded(address newAddress);
+  event ContractUpgraded(address newAddress);
 
   // Fires when DAO accepts new contract;
-  event contractAccepted(bool isAccepted, address contractAddress);
+  event ContractAccepted(bool isAccepted, address contractAddress);
 
   // Stores information about the contract creation event;
-  struct contractCreation {
+  struct ContractCreation {
     uint256 contractID; // ID of contract
     address contractAddress; // Address of new contract
     address creatorAddress; // Address of contract creator
@@ -34,35 +34,35 @@ contract FactoryStorage {
 
   // Mapping of all contracts created by an address;
   // creatorAddress => contractAddresses
-  mapping(address => address[]) contractsCreatedBy;
+  mapping(address => address[]) public contractsCreatedBy;
 
   // Mapping of a contract's owner's address;
   // contractAddress => creatorAddress
-  mapping(address => address) contractOwnedBy;
+  mapping(address => address) public contractOwnedBy;
 
   // Mapping to show if address has created contracts;
   // Used for incrementing totalCreators;
-  mapping(address => bool) isContractCreator;
+  mapping(address => bool) public isContractCreator;
 
-  // Mapping of contractID to contractCreation struct;
-  mapping(uint256 => contractCreation) contractID;
+  // Mapping of contractID to ContractCreation struct;
+  mapping(uint256 => ContractCreation) public contractID;
 
   // Number of total unique creator addresses;
   uint256 public totalCreators;
 
   // Counter for contract IDs;
-  uint256 contractIDCounter;
+  uint256 public contractIDCounter;
 
   // Array of all addresses created by this factory;
-  address[] contractClones;
+  address[] public contractClones;
 
   // Contract address of the DAO contract;
   // Initially belongs to dev wallet;
-  address DAOContract;
+  address public DAOContract;
 
   // Address of the developers' multi-sig wallet;
   // Initially belongs to contract dev;
-  address devWallet;
+  address public devWallet;
 
   constructor() {
     DAOContract = msg.sender;
@@ -96,8 +96,8 @@ contract FactoryStorage {
       totalCreators++; // Add to total count of all creators
     }
 
-    // Create and store contractCreation struct in contractID mapping
-    contractCreation memory newContractCreation = contractCreation(
+    // Create and store ContractCreation struct in contractID mapping
+    ContractCreation memory newContractCreation = ContractCreation(
       contractIDCounter,
       newContract,
       msg.sender,
@@ -109,7 +109,7 @@ contract FactoryStorage {
 
     // Increment the ID counter uint
     contractIDCounter++;
-    emit contractCreated(msg.sender, newContract, newContractCreation.creationTime);
+    emit ContractCreated(msg.sender, newContract, newContractCreation.creationTime);
   }
 
   // Modifier restricting access only to a smart contract;

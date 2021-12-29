@@ -340,7 +340,7 @@ contract PaymentRouter is Context {
 
   // Maps a recipient's array index value to the routeID and their address
   // routeID => recipient address => array index
-  mapping(bytes32 => mapping(address => uint8)) recipIndex;
+  mapping(bytes32 => mapping(address => uint8)) public recipIndex;
 
   /**
    * @dev Function for pulling held tokens to recipient

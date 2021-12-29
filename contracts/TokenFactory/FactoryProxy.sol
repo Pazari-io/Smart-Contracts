@@ -57,12 +57,15 @@ contract FactoryProxy is FactoryStorage {
     }
   }
 
+  //solhint-disable no-complex-fallback
+  //solhint-disable payable-fallback
+
   // Redirects all function calls/value to the contract at currentAddress;
   // Auto-locks after an upgrade until DAO accepts the upgrade;
   fallback() external {
     require(!paused, "ContractFactory locked until DAO approves upgrade");
     address implementation = currentAddress;
-    require(currentAddress != address(0));
+    require(currentAddress != address(0), "address(0) disallowed");
 
     assembly {
       calldatacopy(0, 0, calldatasize())
@@ -80,7 +83,7 @@ contract FactoryProxy is FactoryStorage {
 
   function initializeDAO(address _DAOAddress) external {
     require(msg.sender == devWallet, "Only developers can call this function");
-    require(_DAOAddress != address(0));
+    require(_DAOAddress != address(0), "address(0) disallowed");
     DAOContract = _DAOAddress;
   }
 }

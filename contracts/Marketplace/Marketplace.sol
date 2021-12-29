@@ -10,8 +10,8 @@ import {PaymentRouter} from "../PaymentRouter/PaymentRouter.sol";
 contract Marketplace is PaymentRouter, ERC1155Holder {
   using Counters for Counters.Counter;
   // These counters are used by getInStockItems()
-  Counters.Counter internal itemIDs; // Counter for MarketItem IDs
-  Counters.Counter internal itemsSoldOut; // Counter for items with inStock == false
+  Counters.Counter private itemIDs; // Counter for MarketItem IDs
+  Counters.Counter private itemsSoldOut; // Counter for items with inStock == false
 
   // Struct for market items being sold;
   /**
@@ -52,7 +52,7 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
   // Maps a tokenContract address to a mapping of tokenIds => itemIds
   // The purpose of this is to prevent duplicate items for same token
   // tokenContract address => tokenID => itemID
-  mapping(address => mapping(uint256 => uint256)) private tokenMap;
+  mapping(address => mapping(uint256 => uint256)) public tokenMap;
 
   // Fires when item is put on market;
   event MarketItemCreated(
