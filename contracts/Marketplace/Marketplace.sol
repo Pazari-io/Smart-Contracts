@@ -117,6 +117,9 @@ contract Marketplace is ERC1155Holder, Context {
    * @return itemID ItemID of the market item
    *
    * note Front-end must call IERC1155.setApprovalForAll(marketAddress, true)
+   *
+   * Comment: Isn't msg.sender the seller? Why do we have _sellerAddress as parameter? And why pull erc1155
+   * from msg.sender?
    */
 
   function createMarketItem(
@@ -221,7 +224,9 @@ contract Marketplace is ERC1155Holder, Context {
 
     /* ========== INTERACTIONS ========== */
 
+    //Pull token from msg.sender
     IERC20(item.paymentContract).transferFrom(_msgSender(), address(this), totalCost);
+    //Approve token transfer to payment router
     IERC20(item.paymentContract).approve(address(paymentRouter), totalCost);
 
     // Send ERC20 tokens through PaymentRouter, isPush determines which function is used
@@ -425,6 +430,8 @@ contract Marketplace is ERC1155Holder, Context {
       itemsSoldOut.decrement();
       marketItems[_itemID].forSale = true;
     }
+
+    //EVENT NEEDED!
   }
 
   /**
