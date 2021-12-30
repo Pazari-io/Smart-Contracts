@@ -301,6 +301,8 @@ contract PaymentRouter is Context {
     amount = failedTokens[_msgSender()][_tokenAddress];
     require(IERC20(_tokenAddress).transfer(_msgSender(), amount), "Transfer failed!");
 
+    //EVENT NEEDED!
+
     assert(failedTokens[_msgSender()][_tokenAddress] == 0);
     return true;
   }
@@ -383,6 +385,8 @@ contract PaymentRouter is Context {
    */
   function closePaymentRoute(bytes32 _routeID) external onlyCreator(_routeID) {
     paymentRouteID[_routeID].isActive = false;
+
+    //EVENT NEEDED!
   }
 
   /**
@@ -440,5 +444,7 @@ contract PaymentRouter is Context {
 
     minTax = _minTax;
     maxTax = _maxTax;
+
+    //EVENT NEEDED!
   }
 }
