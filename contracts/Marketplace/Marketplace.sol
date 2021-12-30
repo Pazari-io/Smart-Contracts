@@ -14,18 +14,6 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
   Counters.Counter private itemsSoldOut; // Counter for items with inStock == false
 
   // Struct for market items being sold;
-  /**
-   * changed:
-   * - nftContract => tokenContract
-   * - tokenContract => paymentContract
-   *
-   * added:
-   * - isPush
-   * - routeID
-   * - routeMutable
-   * - inStock
-   * - itemLimit
-   */
   struct MarketItem {
     uint256 itemID;
     address tokenContract;
@@ -83,9 +71,6 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
   event ItemSoldOut(uint256 indexed itemID);
 
   // Fires when market item details are modified
-  /**
-   * changed tokenContract => paymentContract
-   */
   event MarketItemChanged(
     uint256 itemID,
     uint256 price,
@@ -122,39 +107,9 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * @param _routeID The routeID of the payment route assigned to this item
    * @param _itemLimit How many items a buyer can own, 0 == no limit
    * @param _routeMutable Assigns mutability to the routeID, keep false for most items
+   * @return itemID ItemID of the market item
    *
-   * note Front-end must call IERC1155.setApprovalForAll(marketAddress, true) before calling
-   * this function. The seller has to give permission for the marketplace to handle their
-   * tokens before this function will pass. I will modify the token contract to auto-approve
-   * the market's address so this will not be necessary once implemented.
-   *
-   * changed For consistency in how input arguments are named:
-   * - _tokenContract => _paymentContract
-   * - nftContract => _tokenContract
-   * - tokenID => _tokenID
-   * - price => _price
-   * - amount => _amount
-   *
-   * changed Return data is now the itemID of the market item instead of a success bool
-   *
-   * changed Added _routeMutable as an input. This argument determines whether the seller
-   * can alter the routeID of the MarketItem, which will change the commissions and recipients
-   * of the payment route. Mutability may be useful in certain arrangements, but for things
-   * like collaborations immutability is the best option so all participants of the collaboration
-   * can know they will always get paid and nobody can change it.
-   *
-   * changed Added _sellerAddress as an input. This argument assigns an address to be the "seller"
-   * who has permission to modify the MarketItem and toggle forSale.
-   *
-   * Patch Notes V 0.2.2
-   * Accommodated for custodial design of Marketplace
-   * - Changed _itemLimit now accepts 0 as a valid input, where 0 is used for infinite itemLimit.
-   *   It achieves this by intentional underflowing.
-   * - Changed Added require check for ERC1155.isApprovedForAll()
-   * - Changed Added an invariant check to make sure the ERC1155 balanceOf reports the same
-   *   number as the MarketItem's amount for the Marketplace's balance
-   * - Changed Added transferFrom() operation for tokens
-   * - Added a few new comments to better organize the function
+   * note Front-end must call IERC1155.setApprovalForAll(marketAddress, true)
    */
 
   function createMarketItem(
@@ -243,31 +198,7 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    *
    * @param _itemID Market ID of item being bought
    * @param _amount Amount of item itemID being purchased
-   *
-   * Patch Notes: V0.2.1
-   * bug tokenID referred to item.itemID, but was supposed to be item.tokenID
-   * bug In balanceOf require check, boolean operator was ==, which will revert if user's balance
-   * is greater than price * _amount
-   *
-   * changed For consistency:
-   * - nftContract => tokenContract
-   * - tokenContract => paymentContract
-   *
-   * changed Removed almost all local variable declarations because stack was running too deep
-   *
-   * Patch Notes: V0.2.2
-   * - Removed sellersBalance and its require check, replaced with check for inventory != 0
-   * - Replaced sellersBalance with item.amount
-   * - Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
-   * - Added _amount to last require check, so the buyer's _amount plus their balanceOf cannot
-   *   be greater than the itemLimit
-   * - Events were emitting the tokenID instead of itemID, fixed it so now the events will report
-   *   the itemID that was sold instead of the tokenID
-   * - _pushTokens and _holdTokens were receiving the item's price, not the correct amount of
-   *   tokens that are the price * amount. Added the totalCost uint to calculate this, and
-   *   replaced item.price with totalCost for these functions.
-   * - Added a few extra comments
-   * - Added fringe check for _itemID == 0
+   * @return bool Success boolean
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount) external returns (bool) {
     // Pull data from itemID's MarketItem struct
@@ -410,10 +341,6 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * - Seller of market item
    * - RouteID mutability
    * - Item's forSale status
-   *
-   * changed Added MarketItemChanged event
-   *
-   * changed Added if() block to handle routeID mutability
    */
   function modifyMarketItem(
     uint256 _itemID,
@@ -455,10 +382,6 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * forSale will be returned by getInStockItems().
    *
    * @param _itemID Marketplace ID of item for sale
-   *
-   * Patch Notes V0.2.2
-   * - Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
-   * - Removed events, since they don't really make sense to use here.
    */
   function toggleForSale(uint256 _itemID) external onlySeller(_itemID) {
     if (idToMarketItem[_itemID].forSale) {
@@ -503,20 +426,6 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    *
    * note This is from the clone OpenSea tutorial, but I modified it to be
    * slimmer, lighter, and easier to understand.
-   *
-   * bug Added j as a counter variable for unsold items array. I realized that
-   * we can't use items[i - 1] since i is being incremented across entire list
-   * of market items and will not correspond 1:1 with items[], which only has a
-   * length of unsoldItemCount.
-   *
-   * changed Added j <= unsoldItemCount to loop parameters to terminate the
-   * loop once items[] has been fully populated. Otherwise, loop will iterate
-   * through entire inventory of market. Hopefully this might improve efficiency.
-   *
-   * changed Declared i and j outside of for loop, added comments
-   *
-   * changed Switched idToMarketItem[i].amount to idToMarketItem[i].inStock, so
-   * only items that are "in stock" will be shown on list
    *
    * note Because item inventory is no longer tracked internally, I had to implement
    * a new function, getItemStock(), to read sellers' balances, and getAllMarketItems()

@@ -1,6 +1,7 @@
-@title PaymentRouter Version 0.1.0
+# Payment contract v0.1.1
+## Version 0.1.0
 
-@dev This contract takes in ERC20 tokens, splits them, and routes them to their recipients. It extracts a
+This contract takes in ERC20 tokens, splits them, and routes them to their recipients. It extracts a
 "route tax" before routing payment to recipients, which is used to fund the platform.
 
 This contract's design was inspired by OpenZeppelin's PaymentSplitter contract, but does not resemble that
@@ -39,13 +40,11 @@ would be calculated based on the number of recipients they are splitting commiss
 is either an ERC20 transferFrom function that needs to be ran, or a mapping that needs to be updated. Let's
 leave this for a V2 though.
 
-
 NOTE FOR DEVELOPERS:
 Rather than using a mapping to determine who is a developer, we should instead call the treasury contract
 and pull the list of developers from there. This will need to be changed when treasury contract is written.
 This way we can have more control over how developers are added or removed from the team, and can set
 multi-sig authorization for changes to the team so a bad actor can't interfere.
-
 
 THE FOLLOWING FUNCTIONS HAVE BEEN MIGRATION TESTED AND FUNCTION CORRECTLY:
 - getPaymentRouteID
@@ -62,8 +61,24 @@ THE FOLLOWING FUNCTIONS HAVE NOT BEEN TESTED:
 - adjustRouteTax
 - adjustTaxBounds
 
-Version 0.1.1 Patch Notes:
+SIDE NOTE:
+- Using bytes32 hashes for route IDs makes it harder for the wrong route to be used, and it obscures the order in which routes were created. Every creator has a list of routes they created as well, making it even less likely that funds will be sent the wrong way.
 
-- bug Fixed a bug in _pushTokens that throws because both _pushTokens and buyMarketItem both use
+## Version 0.1.1
+
+Bug:
+- Fixed a bug in _pushTokens that throws because both _pushTokens and buyMarketItem both use
 the nonReentrant modifier. Removed nonReentrant from _pushTokens, since it is internal.
-- bug Same bug in _pushTokens existed in _holdTokens, which is fixed now
+- Same bug in _pushTokens existed in _holdTokens, which is fixed now
+
+### _pushTokens()
+
+Bug:
+- Using nonReentrant() modifier throws when a market item is purchased, since buyMarketItem() is also nonReentrant. Since _pushTokens() is an internal function, it doesn't make sense to use nonReentrant, but keeping it on buyMarketItem() is necessary to prevent potential reentrant calls.
+## Version 0.1.2
+### _pushTokens()
+
+Changes:
+- This function was throwing a VM error. This error was fixed by transferring _amount to the contract via transferFrom(), and then using transfer() to perform the micro-transfers.
+- Transfer failure event was renamed to TransferReceipt at some point, so I changed it back to TransferFailed to differentiate between the failure event(s) and the success receipt.
+- Defined local variable "route" earlier in function, simplifies syntax

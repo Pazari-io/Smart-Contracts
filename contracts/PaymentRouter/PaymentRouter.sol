@@ -142,11 +142,6 @@ contract PaymentRouter is Context {
    * - No recipient is address(0)
    * - Commissions are greater than 0% but less than 100%
    * - All commissions add up to exactly 100%
-   *
-   * note The only reason I didn't include this inside the openPaymentRoute function
-   * is because the checks make the function harder to read. It's better to keep them
-   * separate from the main function, even if there is only one function using the
-   * modifier.
    */
   modifier newRouteChecks(address[] memory _recipients, uint16[] memory _commissions) {
     // Check for front-end errors
@@ -192,11 +187,6 @@ contract PaymentRouter is Context {
    * _pushTokens() and _holdTokens() when a payment is made to auto-adjust the
    * routeTax if the developers change it.
    *
-   * If routeTax is less than minTax, then routeTax is set to minTax. If routeTax is
-   * greater than maxTax, then routeTax is set to maxTax. This way, routeTax only
-   * goes up if we increase the minTax, and routeTax only goes down if the route is
-   * paying the maxTax and we decrease the maxTax.
-   *
    * The only situation this does not cover is when maxTax is raised or minTax is
    * reduced.
    */
@@ -228,19 +218,6 @@ contract PaymentRouter is Context {
    * note If any of the transfers should fail for whatever reason, then the transaction should
    * *not* revert. Instead, it will run _storeFailedTransfer which holds on to the recipient's
    * tokens until they are collected. This also throws the TransferReceipt event.
-   *
-   * bug Using nonReentrant() modifier throws when a market item is purchased, since buyMarketItem() is also
-   * nonReentrant. Since _pushTokens() is an internal function, it doesn't make sense to use nonReentrant,
-   * but keeping it on buyMarketItem() is necessary to prevent potential reentrant calls.
-   *
-   * Patch Notes: 0.1.2
-   * changed This function was throwing a VM error. This error was fixed by transferring _amount
-   * to the contract via transferFrom(), and then using transfer() to perform the micro-transfers.
-   *
-   * changed Transfer failure event was renamed to TransferReceipt at some point, so I changed it
-   * back to TransferFailed to differentiate between the failure event(s) and the success receipt.
-   *
-   * changed Defined local variable "route" earlier in function, simplifies syntax
    */
   function _pushTokens(
     bytes32 _routeID,
@@ -292,10 +269,9 @@ contract PaymentRouter is Context {
    * @param _routeID Unique ID of payment route
    * @param _amount Amount of tokens held in escrow by payment route
    * @param _tokenAddress Contract address of tokens being escrowed
+   * @return success Success boolean
    *
    * note This function automatically pushes tokens to the treasury contract.
-   *
-   * bug Using nonReentrant modifier causes buyMarketItem to revert, removed nonReentrant from _holdTokens
    */
   function _holdTokens(
     bytes32 _routeID,
@@ -348,17 +324,6 @@ contract PaymentRouter is Context {
    * @param _routeID Payment route ID
    * @param _tokenAddress Contract address of ERC20 tokens
    *
-   * note This method is more gas efficient on the buyer of a market item, and offloads the gas cost
-   * to the recipient who collects their tokens from escrow. This may be the most efficient method of
-   * distributing commissions to creators, but it would be best to give them the option of how they
-   * want their tokens to be distributed. If they are selling an expensive item, then it may make more
-   * sense to use a push method where the gas fees will be smaller relative to the item's price.
-   *
-   * note This function is directly copied from OpenZeppelin's PaymentSplitter contract, except it has
-   * been modified for the purposes of this contract. While I have not tested it yet, it *should*
-   * behave the same as the PaymentSplitter does, since it uses the exact same math to achieve its
-   * desired functionality--the only difference is the use of mappings to assign routeIDs a token balance
-   * and for users to collect what they own from each routeID.
    */
   function pullTokens(bytes32 _routeID, address _tokenAddress) external returns (bool) {
     uint16 commission; // Commission rate for recipient
@@ -395,14 +360,11 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev Opens a new payment route.
-   * Returns the routeID hash of the created PaymentRoute, and emits a RouteCreated event.
+   * @dev Opens a new payment route
    *
    * @param _recipients Array of all recipient addresses for this payment route
    * @param _commissions Array of all recipients' commissions--in percentages with two decimals
-   *
-   * note The only reason I moved all the require checks to the newRouteChecks modifier is because
-   * they make this function look more complicated than it is.
+   * @return routeID Hash of the created PaymentRoute
    */
   function openPaymentRoute(
     address[] memory _recipients,
@@ -439,10 +401,6 @@ contract PaymentRouter is Context {
    * @param _routeCreator Address of payment route's creator
    * @param _recipients Array of all commission recipients
    * @param _commissions Array of all commissions relative to _recipients
-   *
-   * note Using bytes32 hashes for route IDs makes it harder for the wrong route to be used, and it
-   * obscures the order in which routes were created. Every creator has a list of routes they created
-   * as well, making it even less likely that funds will be sent the wrong way.
    */
   function getPaymentRouteID(
     address _routeCreator,

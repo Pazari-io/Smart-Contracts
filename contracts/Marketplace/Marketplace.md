@@ -1,6 +1,5 @@
-Marketplace Version 0.2.2
-
-Developer notes - IMPLEMENTED IN VERSION 0.2.0:
+# Marketplace contract v0.2.2
+## Version 0.2.0
 
 Introducing tokens and stablecoins, replacing AVAX as a payment method:
 - MarketItem struct now has paymentContract address for token accepted by seller.
@@ -14,10 +13,10 @@ Marketplace now inherits from PaymentRouter, and has fully implemented the Payme
 Marketplace no longer tracks inventory internally, instead all inventory is based on
 the seller's wallet balance for each token.
 - Added the inStock bool to the MarketItem struct.
--- Used by getInStockItems() to find items for sale, instead of internal inventory count.
--- More efficient than checking balanceOf() for every item on the market.
--- The inStock bool turns false when the seller runs out of inventory.
--- The inStock bool must be toggled back on after more tokens have been minted.
+- Used by getInStockItems() to find items for sale, instead of internal inventory count.
+- More efficient than checking balanceOf() for every item on the market.
+- The inStock bool turns false when the seller runs out of inventory.
+- The inStock bool must be toggled back on after more tokens have been minted.
 - Sellers never lose custody of items sold on Pazari, everything is done through private wallets
   which will make selling crypto-native items (like NFTs) easier and more fluid in the future.
 - idea Instead of using a bool, use uint8 to toggle between a 1 or 2 value, which is cheaper
@@ -60,9 +59,8 @@ Added new events to listen for:
 - ItemRestocked - Buyers listen for this event when an item they are watching is back in stock.
 - itemSoldOut - Sellers listen for this event when an item they are selling is sold out.
 - MarketItemChanged - Buyers/Sellers listen for this event.
+## Version 0.2.1
 
-
-0.2.1 Patch Notes:
 - Fixed a bug in getInStockItems() (formerly fetchMarketItems()), see MarketplaceGetters.
 - Fixed a bug in createMarketItem(), see below.
 - Corrected a lot of inconsistencies in terminology and input argument names.
@@ -78,15 +76,69 @@ Added new events to listen for:
   consistency. I prefer to use underscores for function inputs and internal functions only, and I
   never name a state variable, struct, or mapping with an underscore--with some exceptions for
   internal and private visibility.
+### buyMarketItem()
 
-0.2.2 Patch Notes:
+Bug:
+- tokenID referred to item.itemID, but was supposed to be item.tokenID
+- In balanceOf require check, boolean operator was ==, which will revert if user's balance is greater than price * _amount
+- removed almost all local variable declarations because stack was running too deep
+
+Changed For consistency:
+- nftContract => tokenContract
+- tokenContract => paymentContract
+
+### getItemsForSale()
+
+Bug:
+- Added j as a counter variable for unsold items array. I realized that
+we can't use items[i - 1] since i is being incremented across entire list
+of market items and will not correspond 1:1 with items[], which only has a
+length of unsoldItemCount.
+
+Changes:
+- Added j <= unsoldItemCount to loop parameters to terminate the
+loop once items[] has been fully populated. Otherwise, loop will iterate
+through entire inventory of market. Hopefully this might improve efficiency.
+- Declared i and j outside of for loop, added comments
+- Switched idToMarketItem[i].amount to idToMarketItem[i].inStock, so
+only items that are "in stock" will be shown on list
+
+## Version 0.2.2
+
 Made Marketplace custodial. See function comments for details on what was changed for this.
 - changed Added two new functions, restockItem() and pullStock(), see below
 - changed Added "amount" to the ItemRestocked event and MarketItemCreated event
 - changed Added "amount" to MarketItem struct
 - changed Made all necessary changes to createMarketItem(), buyMarketItem(), and toggleInStock()
 - (now toggleForSale()), see below
+### createMarketItem()
 
+Accommodated for custodial design of Marketplace
+- Changed _itemLimit now accepts 0 as a valid input, where 0 is used for infinite itemLimit.
+  It achieves this by intentional underflowing.
+- Changed Added require check for ERC1155.isApprovedForAll()
+- Changed Added an invariant check to make sure the ERC1155 balanceOf reports the same
+  number as the MarketItem's amount for the Marketplace's balance
+- Changed Added transferFrom() operation for tokens
+- Added a few new comments to better organize the function
+### buyMarketItem()
+- Removed sellersBalance and its require check, replaced with check for inventory != 0
+- Replaced sellersBalance with item.amount
+- Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
+- Added _amount to last require check, so the buyer's _amount plus their balanceOf cannot
+  be greater than the itemLimit
+- Events were emitting the tokenID instead of itemID, fixed it so now the events will report
+  the itemID that was sold instead of the tokenID
+- _pushTokens and _holdTokens were receiving the item's price, not the correct amount of
+  tokens that are the price * amount. Added the totalCost uint to calculate this, and
+  replaced item.price with totalCost for these functions.
+- Added a few extra comments
+- Added fringe check for _itemID == 0
+### toggleForSale()
+- Replaced idToMarketItem[_itemID].inStock with idToMarketItem[_itemID].forSale
+- Removed events, since they don't really make sense to use here.
+
+## Version 0.3.0 (Plan)
 
 TO IMPLEMENT IN VERSION 0.3.0:
 - Implement AVAX payments that are PaymentRouter compatible
@@ -101,6 +153,8 @@ TO IMPLEMENT IN VERSION 0.3.0:
   near the beginning, like address or uint256. If we really have time to optimize, then we can also
   use bitwise operators to make the storage even tighter, but the amount of gas saved every time a
   new MarketItem is created may not be all that much.
+
+## Version 0.4.0 (Plan)
 
 TO IMPLEMENT IN VERSION 0.4.0:
 - Meta-transactions!!
