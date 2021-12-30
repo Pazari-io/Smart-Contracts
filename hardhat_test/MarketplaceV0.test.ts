@@ -38,12 +38,10 @@ describe("Marketplace", () => {
   describe("test erc115 setup", () => {
     // TODO support the contract factory
     it("can create new token", async () => {
-      const tx = await contractFactory.newERC1155Contract();
-      const receipt = await tx.wait();
-
-      //@ts-ignore
-      const contractAddr = receipt.events?.filter((x) => x.event === "contractCreated")[0].args[1] as string;
+      const contractAddr = await contractFactory.callStatic.newERC1155Contract();
       const token = IERC1155__factory.connect(contractAddr, accounts[0]);
+
+      await contractFactory.newERC1155Contract();
 
       expect(contractAddr).to.not.eq(ethers.constants.AddressZero, "Contract address is not set");
       expect(await token.balanceOf(accounts[0].address, 1)).to.eq(0, "Shouldn't have any balance to start");
