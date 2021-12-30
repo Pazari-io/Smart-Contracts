@@ -9,12 +9,7 @@ contract PaymentRouter is Context {
   // ****PAYMENT ROUTES****
 
   // Fires when a new payment route is created
-  event RouteCreated(
-    address indexed creator,
-    bytes32 routeID,
-    address[] recipients,
-    uint16[] commissions
-  );
+  event RouteCreated(address indexed creator, bytes32 routeID, address[] recipients, uint16[] commissions);
 
   // Fires when a route creator changes route tax
   event RouteTaxChanged(bytes32 routeID, uint16 newTax);
@@ -87,12 +82,7 @@ contract PaymentRouter is Context {
   event TokensHeld(bytes32 routeID, address tokenAddress, uint256 amount);
 
   // Fires when tokens are collected from holding by a recipient
-  event PaymentReleased(
-    address indexed recipient,
-    bytes32 routeID,
-    address tokenAddress,
-    uint256 amount
-  );
+  event PaymentReleased(address indexed recipient, bytes32 routeID, address tokenAddress, uint256 amount);
 
   // ****DEVELOPERS****
 
@@ -428,11 +418,7 @@ contract PaymentRouter is Context {
    * idea If a route creator chooses maxTax then they become a "sponsor" of the platform
    * and receive promotional boosts for the items tied to the route.
    */
-  function adjustRouteTax(bytes32 _routeID, uint16 _newTax)
-    external
-    onlyCreator(_routeID)
-    returns (bool)
-  {
+  function adjustRouteTax(bytes32 _routeID, uint16 _newTax) external onlyCreator(_routeID) returns (bool) {
     require(_newTax >= minTax, "Minimum tax not met");
     require(_newTax <= maxTax, "Maximum tax exceeded");
 

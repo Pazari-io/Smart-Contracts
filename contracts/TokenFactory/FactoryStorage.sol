@@ -73,11 +73,7 @@ contract FactoryStorage {
     return contractsCreatedBy[_creatorAddress];
   }
 
-  function numberContractsCreated(address _creatorAddress)
-    public
-    view
-    returns (uint256 contractsCreated)
-  {
+  function numberContractsCreated(address _creatorAddress) public view returns (uint256 contractsCreated) {
     return contractsCreatedBy[_creatorAddress].length;
   }
 
@@ -131,11 +127,7 @@ contract FactoryStorage {
 
   // Updates the owner of a contract
   // Only the smart contract being updated for can call this function;
-  function updateOwner(address _newOwner, address _contract)
-    external
-    onlyContract(_contract)
-    returns (bool)
-  {
+  function updateOwner(address _newOwner, address _contract) external onlyContract(_contract) returns (bool) {
     contractOwnedBy[_contract] = _newOwner;
     return true;
   }

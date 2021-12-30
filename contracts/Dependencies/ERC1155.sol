@@ -118,13 +118,7 @@ contract ERC1155 is Context, ERC165, IERC1155, IERC1155MetadataURI {
   /**
    * @dev See {IERC1155-isApprovedForAll}.
    */
-  function isApprovedForAll(address account, address operator)
-    public
-    view
-    virtual
-    override
-    returns (bool)
-  {
+  function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
     return _operatorApprovals[account][operator];
   }
 
@@ -185,14 +179,7 @@ contract ERC1155 is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     address operator = _msgSender();
 
-    _beforeTokenTransfer(
-      operator,
-      from,
-      to,
-      _asSingletonArray(id),
-      _asSingletonArray(amount),
-      data
-    );
+    _beforeTokenTransfer(operator, from, to, _asSingletonArray(id), _asSingletonArray(amount), data);
 
     uint256 fromBalance = _balances[id][from];
     require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
@@ -350,14 +337,7 @@ contract ERC1155 is Context, ERC165, IERC1155, IERC1155MetadataURI {
 
     address operator = _msgSender();
 
-    _beforeTokenTransfer(
-      operator,
-      account,
-      address(0),
-      _asSingletonArray(id),
-      _asSingletonArray(amount),
-      ""
-    );
+    _beforeTokenTransfer(operator, account, address(0), _asSingletonArray(id), _asSingletonArray(amount), "");
 
     uint256 accountBalance = _balances[id][account];
     require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
@@ -435,9 +415,7 @@ contract ERC1155 is Context, ERC165, IERC1155, IERC1155MetadataURI {
     bytes memory data
   ) private {
     if (to.isContract()) {
-      try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (
-        bytes4 response
-      ) {
+      try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
         if (response != IERC1155Receiver(to).onERC1155Received.selector) {
           revert("ERC1155: ERC1155Receiver rejected tokens");
         }

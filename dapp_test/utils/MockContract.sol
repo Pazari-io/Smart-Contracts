@@ -242,19 +242,13 @@ contract MockContract is MockInterface {
     trackMethodIdMock(method);
   }
 
-  function givenCalldataRevertWithMessage(bytes calldata call, string calldata message)
-    external
-    override
-  {
+  function givenCalldataRevertWithMessage(bytes calldata call, string calldata message) external override {
     calldataMockTypes[call] = MockType.Revert;
     calldataRevertMessage[call] = message;
     trackCalldataMock(call);
   }
 
-  function givenMethodRevertWithMessage(bytes calldata call, string calldata message)
-    external
-    override
-  {
+  function givenMethodRevertWithMessage(bytes calldata call, string calldata message) external override {
     bytes4 method = bytesToBytes4(call);
     methodIdMockTypes[method] = MockType.Revert;
     methodIdRevertMessages[method] = message;
@@ -281,12 +275,7 @@ contract MockContract is MockInterface {
     return methodIdInvocations[keccak256(abi.encodePacked(resetCount, method))];
   }
 
-  function invocationCountForCalldata(bytes calldata call)
-    external
-    view
-    override
-    returns (uint256)
-  {
+  function invocationCountForCalldata(bytes calldata call) external view override returns (uint256) {
     return calldataInvocations[keccak256(abi.encodePacked(resetCount, call))];
   }
 

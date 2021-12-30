@@ -20,7 +20,6 @@ abstract contract ERC1155Receiver is ERC165, IERC1155Receiver {
     override(ERC165, IERC165)
     returns (bool)
   {
-    return
-      interfaceId == type(IERC1155Receiver).interfaceId || super.supportsInterface(interfaceId);
+    return interfaceId == type(IERC1155Receiver).interfaceId || super.supportsInterface(interfaceId);
   }
 }

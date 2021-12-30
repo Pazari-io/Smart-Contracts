@@ -193,7 +193,10 @@ contract Marketplace is ERC1155Holder, Context {
     require(item.amount > 0, "Item sold out");
 
     //May not be necessary because this check is already in the ERC20 contract
-    require(IERC20(item.paymentContract).balanceOf(_msgSender()) >= item.price * _amount, "Insufficient funds");
+    require(
+      IERC20(item.paymentContract).balanceOf(_msgSender()) >= item.price * _amount,
+      "Insufficient funds"
+    );
 
     require(_msgSender() != item.seller, "Can't buy your own item");
     require(
@@ -395,7 +398,15 @@ contract Marketplace is ERC1155Holder, Context {
 
     // Emits MarketItemCreated event
     // _msgSender => sellerAddress
-    emit MarketItemCreated(itemID, _tokenContract, _tokenID, _sellerAddress, _price, _amount, _paymentContract);
+    emit MarketItemCreated(
+      itemID,
+      _tokenContract,
+      _tokenID,
+      _sellerAddress,
+      _price,
+      _amount,
+      _paymentContract
+    );
   }
 
   /**
@@ -522,7 +533,7 @@ contract Marketplace is ERC1155Holder, Context {
     uint256 totalItems = marketItems.length - 1;
     marketItem = new MarketItem[](_itemIDs.length);
     for (uint256 i = 0; i < _itemIDs.length; i++) {
-      if(_itemIDs[i] <= totalItems){
+      if (_itemIDs[i] <= totalItems) {
         marketItem[i] = marketItems[_itemIDs[i]];
       }
     }

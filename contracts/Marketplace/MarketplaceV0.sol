@@ -90,14 +90,7 @@ contract MarketplaceV0 is ReentrancyGuard {
     uint256 itemID = _itemIDs.current();
 
     // Assigns MarketItem to itemID
-    idToMarketItem[itemID] = MarketItem(
-      itemID,
-      nftContract,
-      tokenID,
-      payable(msg.sender),
-      price,
-      amount
-    );
+    idToMarketItem[itemID] = MarketItem(itemID, nftContract, tokenID, payable(msg.sender), price, amount);
     contractMap[nftContract][tokenID] = itemID;
 
     // Emits MarketItemCreated event
@@ -123,10 +116,7 @@ contract MarketplaceV0 is ReentrancyGuard {
     require(_amount <= amount, "Insufficient tokens for sale"); // Buyer isn't buying more tokens than for sale
     require(msg.value == price * _amount, "Insufficient funds"); // Buyer has enough AVAX to buy
     // Seller has enough tokens in wallet to sell
-    require(
-      IERC1155(nftContract).balanceOf(seller, tokenID) >= amount,
-      "Seller doesn't have enough tokens"
-    );
+    require(IERC1155(nftContract).balanceOf(seller, tokenID) >= amount, "Seller doesn't have enough tokens");
     require(msg.sender != seller, "Cannot buy if you are the seller");
 
     // EFFECTS
