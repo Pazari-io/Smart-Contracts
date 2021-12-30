@@ -1,4 +1,3 @@
-// Version 0.2.0
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -167,7 +166,7 @@ contract PaymentRouter is Context {
     address _tokenAddress,
     uint256 _amount
   ) external returns (bool) {
-    _pushTokens(_routeID, _tokenAddress, _amount);
+    pushTokens(_routeID, _tokenAddress, _amount);
     return true;
   }
 
@@ -177,7 +176,7 @@ contract PaymentRouter is Context {
     address _tokenAddress,
     uint256 _amount
   ) external {
-    _holdTokens(_routeID, _tokenAddress, _amount);
+    holdTokens(_routeID, _tokenAddress, _amount);
   }
 
   /**
@@ -219,12 +218,14 @@ contract PaymentRouter is Context {
    * *not* revert. Instead, it will run _storeFailedTransfer which holds on to the recipient's
    * tokens until they are collected. This also throws the TransferReceipt event.
    */
-  function _pushTokens(
+  function pushTokens(
     bytes32 _routeID,
     address _tokenAddress,
     uint256 _amount
-  ) internal checkRouteTax(_routeID) returns (bool) {
+  ) public checkRouteTax(_routeID) returns (bool) {
     require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
+
+    //May not be necessary because this check is already in the ERC20 contract
     require(
       IERC20(_tokenAddress).allowance(_msgSender(), address(this)) >= _amount,
       "Insufficient allowance"
@@ -273,11 +274,11 @@ contract PaymentRouter is Context {
    *
    * note This function automatically pushes tokens to the treasury contract.
    */
-  function _holdTokens(
+  function holdTokens(
     bytes32 _routeID,
     address _tokenAddress,
     uint256 _amount
-  ) internal checkRouteTax(_routeID) returns (bool) {
+  ) public checkRouteTax(_routeID) returns (bool) {
     // Calculate treasury's commission from _amount
     uint256 tax = (_amount * paymentRouteID[_routeID].routeTax) / 10000;
 
@@ -340,8 +341,7 @@ contract PaymentRouter is Context {
       routeTokensReleased[_routeID][_tokenAddress];
 
     // Recipient's due payment
-    uint256 payment = (totalReceived * commission) /
-      10000 -
+    uint256 payment = ((totalReceived * commission) / 10000) -
       recipTokensReleased[recipient][_routeID][_tokenAddress];
 
     require(payment != 0, "Recipient is not due payment");

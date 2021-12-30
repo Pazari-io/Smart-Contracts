@@ -5,13 +5,14 @@ import "../Dependencies/Counters.sol";
 import "../Dependencies/IERC20Metadata.sol";
 import "../Dependencies/ERC1155Holder.sol";
 import "../Dependencies/IERC1155.sol";
-import {PaymentRouter} from "../PaymentRouter/PaymentRouter.sol";
+import "../Dependencies/Context.sol";
+import "../PaymentRouter/IPaymentRouter.sol";
 
-contract Marketplace is PaymentRouter, ERC1155Holder {
+contract Marketplace is ERC1155Holder, Context {
   using Counters for Counters.Counter;
-  // These counters are used by getInStockItems()
-  Counters.Counter private itemIDs; // Counter for MarketItem IDs
-  Counters.Counter private itemsSoldOut; // Counter for items with inStock == false
+
+  // Counter for items with inStock == false
+  Counters.Counter private itemsSoldOut;
 
   // Struct for market items being sold;
   struct MarketItem {
@@ -29,9 +30,8 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     uint256 itemLimit;
   }
 
-  // Mapping that maps item IDs to their MarketItem structs
-  // itemID => MarketItem
-  mapping(uint256 => MarketItem) public idToMarketItem;
+  // market items array
+  MarketItem[] public marketItems;
 
   // Maps a seller's address to an array of all itemIDs they have created
   // seller's address => itemID
@@ -42,6 +42,9 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
   // tokenContract address => tokenID => itemID
   mapping(address => mapping(uint256 => uint256)) public tokenMap;
 
+  //Address of PaymentRouter contract
+  IPaymentRouter public immutable paymentRouter;
+
   // Fires when item is put on market;
   event MarketItemCreated(
     uint256 indexed itemID,
@@ -50,19 +53,20 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     address seller,
     uint256 price,
     uint256 amount,
-    string tokenTicker
+    address paymentToken
   );
 
   // Fires when item is sold;
   event MarketItemSold(uint256 indexed itemID, uint256 amount, address owner);
 
   // Fires when seller changes an item's price
-  event ItemPriceChanged(
-    uint256 indexed itemID,
-    string tokenTicker,
-    uint256 oldPrice,
-    uint256 newPrice
-  );
+  // NOT USED
+  // event ItemPriceChanged(
+  //   uint256 indexed itemID,
+  //   address paymentToken,
+  //   uint256 oldPrice,
+  //   uint256 newPrice
+  // );
 
   // Fires when creator restocks items that are sold out
   event ItemRestocked(uint256 indexed itemID, uint256 amount);
@@ -82,16 +86,19 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
 
   // Restricts access to the seller of the item
   modifier onlySeller(uint256 _itemID) {
-    require(idToMarketItem[_itemID].seller == _msgSender(), "Unauthorized: Only seller");
+    require(_itemID < marketItems.length, "Item does not exist");
+    require(marketItems[_itemID].seller == _msgSender(), "Unauthorized: Only seller");
     _;
   }
 
-  constructor(
-    address _treasuryAddress,
-    address[] memory _developers,
-    uint16 _minTax,
-    uint16 _maxTax
-  ) PaymentRouter(_treasuryAddress, _developers, _minTax, _maxTax) {}
+  constructor(address _paymentRouter) {
+    //Connect to payment router contract
+    paymentRouter = IPaymentRouter(_paymentRouter);
+
+    //Fill 0th spot of market items array
+    _createMarketItem(address(0), address(0), 0, 0, 0, address(0), false, false, bytes32(0), 0, false);
+    itemsSoldOut.increment();
+  }
 
   /**
    * @dev Creates a MarketItem struct and assigns it an itemID
@@ -125,71 +132,43 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     uint256 _itemLimit,
     bool _routeMutable
   ) external returns (uint256 itemID) {
-    // CHECKS
+    /* ========== CHECKS ========== */
+
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_price > 0, "Price cannot be 0");
-    require(IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID) > 0, "Insufficient tokens");
-    require(
-      IERC1155(_tokenContract).isApprovedForAll(_msgSender(), address(this)),
-      "Insufficient allowance"
-    );
+
+    //These two may not be necessary because these are already in the ERC1155 contract
+    require(IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID) > _amount, "Insufficient tokens");
+    require(IERC1155(_tokenContract).isApprovedForAll(_msgSender(), address(this)), "Insufficient allowance");
+
     require(_paymentContract != address(0), "Invalid payment token contract address");
-    require(paymentRouteID[_routeID].isActive, "Payment route inactive");
+    (, , bool isActive) = paymentRouter.paymentRouteID(_routeID);
+    require(isActive, "Payment route inactive");
 
-    // If itemLimit == 0, then there is no itemLimit, use underflow to make itemLimit infinite
-    // Yes, the underflow "error" is intentional
-    if (_itemLimit == 0) {
-      unchecked {
-        _itemLimit -= 1;
-      }
-    }
+    /* ========== EFFECTS ========== */
 
-    //EFFECTS
-    // Increases itemIDs by 1, stores current value as itemID
-    itemIDs.increment(); // Increment itemIDs first so itemIDs begin at 1 instead of 0
-    itemID = itemIDs.current();
-
-    // Assigns MarketItem to itemID
-    idToMarketItem[itemID] = MarketItem(
-      itemID,
+    //Store market item
+    itemID = _createMarketItem(
       _tokenContract,
+      _sellerAddress,
       _tokenID,
       _amount,
-      _sellerAddress,
       _price,
       _paymentContract,
       _isPush,
-      _routeID,
-      _routeMutable,
       _forSale,
-      _itemLimit
+      _routeID,
+      _itemLimit,
+      _routeMutable
     );
 
-    // Store new MarketItem in local variable
-    MarketItem memory item = idToMarketItem[itemID];
+    /* ========== INTERACTIONS ========== */
 
-    // Push itemID to seller's market items array
-    sellersMarketItems[_msgSender()].push(itemID);
-
-    // Assign itemID to tokenMap mapping
-    tokenMap[_tokenContract][_tokenID] = itemID;
-
-    // Emits MarketItemCreated event
-    emit MarketItemCreated(
-      itemID,
-      _tokenContract,
-      _tokenID,
-      _msgSender(),
-      _price,
-      _amount,
-      IERC20Metadata(_paymentContract).symbol()
-    );
-
-    // INTERACTIONS
     // Transfer tokens from seller to Marketplace
     IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
 
     // This should pass in all conditions
+    MarketItem memory item = marketItems[itemID];
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
   }
 
@@ -201,55 +180,55 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * @return bool Success boolean
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount) external returns (bool) {
+    /* ========== CHECKS ========== */
+
+    require(_itemID < marketItems.length, "Item does not exist");
+
     // Pull data from itemID's MarketItem struct
-    MarketItem memory item = idToMarketItem[_itemID];
+    MarketItem memory item = marketItems[_itemID];
     // Defines total cost of purchase
     uint256 totalCost = item.price * _amount;
 
-    // CHECKS:
-    require(_itemID != 0, "Item does not exist");
     require(item.forSale, "Item not for sale");
-    require(item.amount != 0, "Item sold out");
-    require(
-      IERC20(item.paymentContract).balanceOf(_msgSender()) >= item.price * _amount,
-      "Insufficient funds"
-    );
+    require(item.amount > 0, "Item sold out");
+
+    //May not be necessary because this check is already in the ERC20 contract
+    require(IERC20(item.paymentContract).balanceOf(_msgSender()) >= item.price * _amount, "Insufficient funds");
+
     require(_msgSender() != item.seller, "Can't buy your own item");
     require(
-      IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) + _amount <=
-        item.itemLimit,
+      IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) + _amount <= item.itemLimit,
       "Purchase exceeds item limit"
     );
 
-    // EFFECTS
+    /* ========== EFFECTS ========== */
+
     if (item.amount <= _amount) {
       // If buy order exceeds all available stock, then:
       itemsSoldOut.increment(); // Increment counter variable for items sold out
       _amount = item.amount; // Set _amount to the item's remaining inventory
-      idToMarketItem[_itemID].forSale = false; // Set forSale to false
+      marketItems[_itemID].forSale = false; // Set forSale to false
       emit ItemSoldOut(item.itemID); // Emit itemSoldOut event
     }
 
     // Adjust Marketplace's itemID inventory
-    idToMarketItem[_itemID].amount -= _amount;
+    marketItems[_itemID].amount -= _amount;
     // Emit marketItemSold
     emit MarketItemSold(item.itemID, _amount, _msgSender());
 
-    //INTERACTIONS
+    /* ========== INTERACTIONS ========== */
+
+    IERC20(item.paymentContract).transferFrom(_msgSender(), address(this), totalCost);
+    IERC20(item.paymentContract).approve(address(paymentRouter), totalCost);
+
     // Send ERC20 tokens through PaymentRouter, isPush determines which function is used
     // note PaymentRouter functions make external calls to ERC20 contracts, thus they are interactions
     item.isPush
-      ? _pushTokens(item.routeID, item.paymentContract, totalCost) // Pushes tokens to recipients
-      : _holdTokens(item.routeID, item.paymentContract, totalCost); // Holds tokens for pull collection
+      ? paymentRouter.pushTokens(item.routeID, item.paymentContract, totalCost) // Pushes tokens to recipients
+      : paymentRouter.holdTokens(item.routeID, item.paymentContract, totalCost); // Holds tokens for pull collection
 
     // Call market item's token contract and transfer token from Marketplace to buyer
-    IERC1155(item.tokenContract).safeTransferFrom(
-      address(this),
-      _msgSender(),
-      item.tokenID,
-      _amount,
-      ""
-    );
+    IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
     return true;
@@ -263,9 +242,11 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * @param _amount Amount of tokens being restocked
    */
   function restockItem(uint256 _itemID, uint256 _amount) external onlySeller(_itemID) {
-    MarketItem memory item = idToMarketItem[_itemID];
-    // CHECKS
-    require(_itemID != 0, "MarketItem does not exist");
+    /* ========== CHECKS ========== */
+    require(marketItems.length < _itemID, "MarketItem does not exist");
+    MarketItem memory item = marketItems[_itemID];
+
+    //These two may not be necessary because these are already in the ERC1155 contract
     require(
       IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount,
       "Insufficient tokens to restock"
@@ -275,18 +256,12 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
       "Marketplace is not approved for token transfer"
     );
 
-    // EFFECTS
-    idToMarketItem[_itemID].amount += _amount;
+    /* ========== EFFECTS ========== */
+    marketItems[_itemID].amount += _amount;
     emit ItemRestocked(_itemID, _amount);
 
-    // INTERACTIONS
-    IERC1155(item.tokenContract).safeTransferFrom(
-      item.seller,
-      address(this),
-      item.tokenID,
-      _amount,
-      ""
-    );
+    /* ========== INTERACTIONS ========== */
+    IERC1155(item.tokenContract).safeTransferFrom(item.seller, address(this), item.tokenID, _amount, "");
 
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
   }
@@ -298,9 +273,10 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
    */
   function pullStock(uint256 _itemID, uint256 _amount) external onlySeller(_itemID) {
-    MarketItem memory item = idToMarketItem[_itemID]; // Store initial values
-    // CHECKS
-    require(_itemID != 0, "MarketItem does not exist");
+    /* ========== CHECKS ========== */
+    require(marketItems.length < _itemID, "MarketItem does not exist");
+    // Store initial values
+    MarketItem memory item = marketItems[_itemID];
     require(item.amount >= _amount, "Not enough inventory to pull");
 
     // Pulls all remaining tokens if _amount == 0
@@ -308,20 +284,16 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
       _amount = item.amount;
     }
 
-    // EFFECTS
-    idToMarketItem[_itemID].amount -= _amount;
+    /* ========== EFFECTS ========== */
+    marketItems[_itemID].amount -= _amount;
 
-    // INTERACTIONS
-    IERC1155(item.tokenContract).safeTransferFrom(
-      address(this),
-      _msgSender(),
-      item.tokenID,
-      _amount,
-      ""
-    );
+    /* ========== INTERACTIONS ========== */
+    IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
+
+    //EVENT NEEDED!!!!!
 
     // This should always pass
-    assert(idToMarketItem[_itemID].amount < item.amount);
+    assert(marketItems[_itemID].amount < item.amount);
   }
 
   /**
@@ -350,13 +322,13 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     bytes32 _routeID,
     uint256 _itemLimit
   ) external onlySeller(_itemID) returns (bool) {
-    MarketItem memory oldItem = idToMarketItem[_itemID];
+    MarketItem memory oldItem = marketItems[_itemID];
     if (!oldItem.routeMutable) {
       // If the payment route is not mutable...
       _routeID = oldItem.routeID; // ...then set the input equal to the old routeID
     }
 
-    idToMarketItem[_itemID] = MarketItem(
+    marketItems[_itemID] = MarketItem(
       _itemID,
       oldItem.tokenContract,
       oldItem.tokenID,
@@ -375,6 +347,57 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     return true;
   }
 
+  function _createMarketItem(
+    address _tokenContract,
+    address _sellerAddress,
+    uint256 _tokenID,
+    uint256 _amount,
+    uint256 _price,
+    address _paymentContract,
+    bool _isPush,
+    bool _forSale,
+    bytes32 _routeID,
+    uint256 _itemLimit,
+    bool _routeMutable
+  ) private returns (uint256 itemID) {
+    // If itemLimit == 0, then there is no itemLimit, use underflow to make itemLimit infinite
+    if (_itemLimit == 0) {
+      _itemLimit = type(uint256).max;
+    }
+
+    itemID = marketItems.length;
+
+    // Store new MarketItem in local variable
+    MarketItem memory item = MarketItem(
+      itemID,
+      _tokenContract,
+      _tokenID,
+      _amount,
+      _sellerAddress,
+      _price,
+      _paymentContract,
+      _isPush,
+      _routeID,
+      _routeMutable,
+      _forSale,
+      _itemLimit
+    );
+
+    // Assigns MarketItem to itemID
+    marketItems.push(item);
+
+    // Push itemID to seller's market items array
+    //_msgSender => sellerAddress
+    sellersMarketItems[_sellerAddress].push(itemID);
+
+    // Assign itemID to tokenMap mapping
+    tokenMap[_tokenContract][_tokenID] = itemID;
+
+    // Emits MarketItemCreated event
+    // _msgSender => sellerAddress
+    emit MarketItemCreated(itemID, _tokenContract, _tokenID, _sellerAddress, _price, _amount, _paymentContract);
+  }
+
   /**
    * @dev Toggles whether an item is for sale or not
    *
@@ -384,12 +407,12 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * @param _itemID Marketplace ID of item for sale
    */
   function toggleForSale(uint256 _itemID) external onlySeller(_itemID) {
-    if (idToMarketItem[_itemID].forSale) {
+    if (marketItems[_itemID].forSale) {
       itemsSoldOut.increment();
-      idToMarketItem[_itemID].forSale = false;
+      marketItems[_itemID].forSale = false;
     } else {
       itemsSoldOut.decrement();
-      idToMarketItem[_itemID].forSale = true;
+      marketItems[_itemID].forSale = true;
     }
   }
 
@@ -403,12 +426,13 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * newly created MarketItem.
    */
   function getLastItemID() public view returns (uint256 itemID) {
-    itemID = itemIDs.current();
+    itemID = marketItems.length;
   }
 
-  function getNextItemID() public view returns (uint256 itemID) {
-    itemID = getLastItemID() + 1;
-  }
+  //Probably unnecessary:
+  // function getNextItemID() public view returns (uint256 itemID) {
+  //   itemID = getLastItemID() + 1;
+  // }
 
   /**
    * @dev Returns an array of all itemIDs created by _seller
@@ -417,10 +441,11 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * and displayed on one page. In this case, chain together getSellersItemIDs(), getMarketItem(),
    * and getItemStock() to return this information.
    */
-  function getSellersItemIDs(address _seller) public view returns (uint256[] memory) {
-    return sellersMarketItems[_seller];
-  }
+  // function getSellersItemIDs(address _seller) public view returns (uint256[] memory) {
+  //   return sellersMarketItems[_seller];
+  // }
 
+  //I think getItemIDsForSale is enough
   /**
    * @dev Returns an array of all items for sale on marketplace
    *
@@ -436,7 +461,7 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    */
   function getItemsForSale() public view returns (MarketItem[] memory) {
     // Fetch total item count, both sold and unsold
-    uint256 itemCount = itemIDs.current();
+    uint256 itemCount = marketItems.length - 1;
     // Calculate total unsold items
     uint256 unsoldItemCount = itemCount - itemsSoldOut.current();
 
@@ -448,8 +473,8 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
 
     // Loop that populates the items[] array
     for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
-      if (idToMarketItem[i].forSale) {
-        MarketItem memory unsoldItem = idToMarketItem[i];
+      if (marketItems[i].forSale) {
+        MarketItem memory unsoldItem = marketItems[i];
         items[j] = unsoldItem; // Assign unsoldItem to items[j]
         j++; // Increment j
       }
@@ -468,7 +493,7 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
    * to return a list of all inStock itemIDs for various other purposes too.
    */
   function getItemIDsForSale() public view returns (uint256[] memory itemIDs_) {
-    uint256 itemCount = itemIDs.current();
+    uint256 itemCount = marketItems.length - 1;
     uint256 unsoldItemCount = itemCount - itemsSoldOut.current();
     itemIDs_ = new uint256[](unsoldItemCount);
 
@@ -476,54 +501,53 @@ contract Marketplace is PaymentRouter, ERC1155Holder {
     uint256 j; // itemIDs_[] index counter for STOCKED market items, starts at 0
 
     for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
-      if (idToMarketItem[i].forSale) {
+      if (marketItems[i].forSale) {
         itemIDs_[j] = i; // Assign unsoldItem to items[j]
         j++; // Increment j
       }
     }
   }
 
-  /**
+  /** Unnecessary because marketItems is public
    * @dev Returns a single MarketItem
    */
-  function getMarketItem(uint256 _itemID) public view returns (MarketItem memory marketItem) {
-    marketItem = idToMarketItem[_itemID];
-  }
+  // function getMarketItem(uint256 _itemID) public view returns (MarketItem memory marketItem) {
+  //   marketItem = marketItems[_itemID];
+  // }
 
   /**
    * @dev Overloaded version of getMarketItem that takes an array as argument and returns an array
    */
-  function getMarketItem(uint256[] memory _itemIDs)
-    public
-    view
-    returns (MarketItem[] memory marketItem)
-  {
+  function getMarketItems(uint256[] memory _itemIDs) public view returns (MarketItem[] memory marketItem) {
+    uint256 totalItems = marketItems.length - 1;
     marketItem = new MarketItem[](_itemIDs.length);
     for (uint256 i = 0; i < _itemIDs.length; i++) {
-      marketItem[i] = idToMarketItem[_itemIDs[i]];
+      if(_itemIDs[i] <= totalItems){
+        marketItem[i] = marketItems[_itemIDs[i]];
+      }
     }
   }
 
-  /**
+  /** Probably uncessary beacuase one can just call marketItems()
    * @dev Returns the total inventory of a MarketItem
    */
-  function getItemStock(uint256 _itemID) public view returns (uint256 itemStock) {
-    MarketItem memory item = idToMarketItem[_itemID];
-    itemStock = item.amount;
-  }
+  // function getItemStock(uint256 _itemID) public view returns (uint256 itemStock) {
+  //   MarketItem memory item = marketItems[_itemID];
+  //   itemStock = item.amount;
+  // }
 
-  /**
+  /** Probably uncessary beacuase one can just call getMarketItems()
    * @dev Overloaded version of getItemStock that takes an array of itemIDs and returns an array of
    * item inventories.
    */
-  function getItemStock(uint256[] memory _itemIDs)
-    public
-    view
-    returns (uint256[] memory itemStocks)
-  {
-    itemStocks = new uint256[](_itemIDs.length);
-    for (uint256 i = 0; i < _itemIDs.length; i++) {
-      itemStocks[i] = getItemStock(_itemIDs[i]);
-    }
-  }
+  // function getItemStock(uint256[] memory _itemIDs)
+  //   public
+  //   view
+  //   returns (uint256[] memory itemStocks)
+  // {
+  //   itemStocks = new uint256[](_itemIDs.length);
+  //   for (uint256 i = 0; i < _itemIDs.length; i++) {
+  //     itemStocks[i] = getItemStock(_itemIDs[i]);
+  //   }
+  // }
 }
