@@ -56,7 +56,7 @@ interface IMarketplace {
   // FUNCTIONS
 
   /**
-   * @dev Creates a MarketItem struct and assigns it an itemID
+   * @notice Creates a MarketItem struct and assigns it an itemID
    *
    * @param _tokenContract Token contract address of the item being sold
    * @param _ownerAddress Owner's address that can access modifyMarketItem() (MVP: msg.sender)
@@ -68,8 +68,11 @@ interface IMarketplace {
    * @param _forSale Sets whether item is immediately up for sale (MVP: true)
    * @param _routeID The routeID of the payment route assigned to this item
    * @param _itemLimit How many items a buyer can own, 0 == no limit (MVP: 1)
-   * @param _routeMutable Assigns mutability to the routeID, keep false for most items (MVP: true)
+   * @param _routeMutable Assigns mutability to the routeID, keep false for most items (MVP: false)
    * @return itemID ItemID of the market item
+   *
+   * @dev Front-end must call IERC1155.setApprovalForAll(marketAddress, true) for any ERC1155 token
+   * that is NOT a Pazari1155 contract. Pazari1155 will have auto-approval for Marketplace.
    */
   function createMarketItem(
     address _tokenContract,
@@ -86,32 +89,29 @@ interface IMarketplace {
   ) external returns (uint256 itemID);
 
   /**
-   * @dev Accesses the marketItems[] array
+   * @notice Accesses the marketItems[] array
    * @return MarketItem MarketItem struct stored at _index
    *
-   * note _index = itemID - 1
+   * @dev _index = itemID - 1
    */
   function marketItems(uint256 _index) external returns (MarketItem memory);
 
   /**
-   * @dev Purchases an _amount of market item itemID
+   * @notice Purchases an _amount of market item itemID
    *
    * @param _itemID Market ID of item being bought
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
    *
-   * note Providing _amount == 0 will purchase the item's full itemLimit minus
-   * the buyer's existing balance. This way, if a buyer wants to max out the
-   * amount of itemID they are allowed to own, then the front-end can just
-   * pass 0 for _amount and the contract will do the rest.
+   * @dev Providing _amount == 0 will purchase the item's full itemLimit.
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount) external returns (bool);
 
   /**
-   * @dev Transfers more stock to a MarketItem, requires minting more tokens first and setting
+   * @notice Transfers more stock to a MarketItem, requires minting more tokens first and setting
    * approval for Marketplace.
    *
-   * NOT USED FOR MVP
+   * @dev NOT USED FOR MVP
    *
    * @param _itemID MarketItem ID
    * @param _amount Amount of tokens being restocked
@@ -119,9 +119,9 @@ interface IMarketplace {
   function restockItem(uint256 _itemID, uint256 _amount) external;
 
   /**
-   * @dev Removes _amount of item tokens for _itemID and transfers back to seller's wallet
+   * @notice Removes _amount of item tokens for _itemID and transfers back to seller's wallet
    *
-   * NOT USED FOR MVP
+   * @dev NOT USED FOR MVP
    *
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
@@ -129,10 +129,10 @@ interface IMarketplace {
   function pullStock(uint256 _itemID, uint256 _amount) external;
 
   /**
-   * @dev Function that allows item creator to change price, accepted payment
+   * @notice Function that allows item creator to change price, accepted payment
    * token, whether token uses push or pull routes, and payment route.
    *
-   * MVP SHOULD ONLY CHANGE PRICE
+   * @dev MVP SHOULD ONLY CHANGE PRICE
    *
    * @param _itemID Market item ID
    * @param _price Market price--in stablecoins
@@ -140,6 +140,7 @@ interface IMarketplace {
    * @param _isPush Tells PaymentRouter to use push or pull function (MVP: true)
    * @param _routeID Payment route ID, only mutable if routeMutable == true (MVP: 0)
    * @param _itemLimit Buyer's purchase limit for item (MVP: 1)
+   * @return Sucess boolean
    */
   function modifyMarketItem(
     uint256 _itemID,
@@ -151,9 +152,9 @@ interface IMarketplace {
   ) external returns (bool);
 
   /**
-   * @dev Toggles whether an item is for sale or not
+   * @notice Toggles whether an item is for sale or not
    *
-   * Use this function to activate/deactivate items for sale on market. Only items that are
+   * @dev Use this function to activate/deactivate items for sale on market. Only items that are
    * forSale will be returned by getItemsForSale() and getItemIDsForSale().
    *
    * @param _itemID Marketplace ID of item for sale
@@ -162,26 +163,21 @@ interface IMarketplace {
 
   /**
    * @dev Returns an array of all items for sale on marketplace
-   *
-   * note This is from the clone OpenSea tutorial, but I modified it to be
-   * slimmer, lighter, and easier to understand.
-   *
    */
   function getItemsForSale() external view returns (MarketItem[] memory);
 
   /**
-   * @dev Getter function for all itemIDs with forSale. This function should run lighter and faster
-   * than getItemsForSale() because it doesn't return structs.
+   * @notice Getter function for all itemIDs with forSale.
    */
   function getItemIDsForSale() external view returns (uint256[] memory itemIDs);
 
   /**
-   * @dev Returns an array of MarketItem structs given an array of _itemIDs.
+   * @notice Returns an array of MarketItem structs given an array of _itemIDs.
    */
   function getMarketItems(uint256[] memory _itemIDs) external view returns (MarketItem[] memory marketItems_);
 
   /**
-   * @dev Checks if an address owns a tokenID from a token contract
+   * @notice Checks if an address owns a tokenID from a token contract
    *
    * @param _owner The token owner being checked
    * @param _tokenContract The contract address of the token being checked

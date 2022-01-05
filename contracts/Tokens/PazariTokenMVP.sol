@@ -11,21 +11,8 @@
  * However, they are not transferrable to anyone who isn't an
  * owner of the contract. These tokens are pseudo-NFTs.
  *
- * TokenIDs start at 1 instead of 0. TokenID 0 can be used for
- * existence checking.
- *
  * All tokenHolders are tracked inside of each tokenID's TokenProps,
  * which makes airdrops much easier to accommodate.
- *
- * For ownsToken() and airdropToken() I created three overloaded
- * designs for these functions. We can only use one design of each
- * function due to contract size limits in the factory.
- * - I intend to move the airdropping functionality to a new
- *   utility contract that can be cloned by sellers who wish
- *   to use it. This contract is already on the edge of its
- *   size limits, so we need to figure out which functions
- *   can be offloaded to an external contract before we
- *   deploy the official MVP.
  */
 
 // SPDX-License-Identifier: MIT
@@ -91,6 +78,8 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     for (uint256 i = 0; i < _contractOwners.length; i++) {
       _operatorApprovals[_msgSender()][_contractOwners[i]] = true;
       isOwner[_contractOwners[i]] = true;
+
+      emit ApprovalForAll(_msgSender(), _contractOwners[i], true);
     }
   }
 
@@ -118,26 +107,10 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   function addOwner(address _newOwner) external onlyOwners {
     _operatorApprovals[msg.sender][_newOwner] = true;
     isOwner[_newOwner] = true;
+
+    emit ApprovalForAll(msg.sender, _newOwner, true);
   }
 
-  /**
-   * @dev Checks if user owns _tokenID.
-   *
-   * This function is intended for the front-end to determine when to permit downloads and
-   * streaming services, and can be called by anyone. Returns a bool of whether or not the
-   * _owner owns the _tokenID.
-   *
-   * @param _tokenID TokenID being checked
-   * @param _owner Address being checked
-   */
-  /*
-    function ownsToken(uint256 _tokenID, address _owner) public view returns (bool hasToken) {
-        if (balanceOf(_owner, _tokenID) != 0) {
-            hasToken = true;
-        }
-        else hasToken = false;
-    }
-*/
   /**
    * @dev Overloaded version of ownsToken(), checks multiple tokenIDs against a single address and
    * returns an array of bools indicating ownership for each _tokenID[i].
@@ -163,45 +136,6 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     }
   }
 
-  /**
-   * @dev Overloaded version of ownsToken(), checks multiple tokenIDs against multiple owners. Returns
-   * an array of arrays. Each element in the outer array is a bool array for _tokenIDs[i], and each
-   * element in an inner array is a bool for each _owners[j] indicating ownership of _tokenIDs[i].
-   *
-   * @param _tokenIDs Array of all tokenIDs being checked
-   * @param _owners Array of all addresses being checked
-   * @return hasTokens Array of arrays indicating if each address owns each tokenID
-   *
-   * This may not ever be needed, I'm including it in case it is useful.
-   *
-   * note Since this is a view function, we can get away with using a double-loop pattern. This
-   * function should NEVER be called by another contract though, it will most likely run out of gas!
-   */
-  /*
-    function ownsToken(uint256[] memory _tokenIDs, address[] memory _owners) public view returns (bool[][] memory hasTokens) {
-        // Declare local variables for outer loop
-        uint i; // Counter for _tokenIDs
-        hasTokens = new bool[][](_tokenIDs.length);
-
-        // Assemble outer array
-        for(i = 0; i < _tokenIDs.length; i++){
-            // Declare local variables for inner loop
-            uint j; // Counter for _owners
-            uint256 tokenID = _tokenIDs[i];
-            bool[] memory tempBools = new bool[](_owners.length);
-        
-            // Assemble inner array
-            for(j = 0; j < _owners.length; i++){
-                address owner = _owners[j];
-                if (balanceOf(owner, tokenID) != 0) {
-                    tempBools[j] = true;
-                }
-                else tempBools[j] = false;
-            }
-            hasTokens[i] = tempBools;
-        }
-    }
-*/
   /**
    * @dev Creates a new Pazari Token
    *
@@ -250,8 +184,6 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     tokenIDs.push(newToken);
 
     require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
-    /*
-     */
   }
 
   /**
@@ -309,26 +241,11 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   }
 
   /**
-   * @dev Performs an airdrop of _tokenID to all _recipients
-   *
-   * @param _tokenID Token being airdropped
+   * @dev Overloaded version of airdropTokens() that can airdrop multiple tokenIDs to each _recipients[j]
+   * @param _tokenIDs Token being airdropped
+   * @param _amounts Amount of tokens
    * @param _recipients Array of all airdrop recipients
    * @return Success bool
-   */
-  /*
-    function airdropTokens(uint256 _tokenID, uint256 _amount, address[] memory _recipients) external onlyOwners returns (bool) {
-        require(balanceOf(_msgSender(), _tokenID) >= _recipients.length * _amount, "Not enough tokens for airdrop");
-        for(uint i = 0; i < _recipients.length; i++){
-            if(_recipients[i] == address(0)){
-                continue;
-            }
-            else _safeTransferFrom(_msgSender(), _recipients[i], _tokenID, _amount, "");
-        }
-        return true;
-    }
-*/
-  /**
-   * @dev Overloaded version of airdropTokens() that can airdrop multiple tokenIDs to each _recipients[j]
    */
   function airdropTokens(
     uint256[] memory _tokenIDs,
@@ -356,7 +273,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * array found at tokenIDs[_tokenToCheck]. This is much simpler to call, but cannot be given an
    * arbitrary array of recipients for the airdrop.
    */
-  /*
+
     function airdropTokens(uint256 _tokenToDrop, uint256 _tokenToCheck, uint256 _amount) external onlyOwners returns (bool) {
         address[] memory tokenHolders = tokenIDs[_tokenToCheck - 1].tokenHolders;
         require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
@@ -366,8 +283,8 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
             else _safeTransferFrom(_msgSender(), tokenHolders[i], _tokenToDrop, _amount, "");
         }
         return true;
-    }        
-*/
+    }
+
   /**
    * -----------------------------------
    *     ERC1155 STANDARD FUNCTIONS

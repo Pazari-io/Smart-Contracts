@@ -37,35 +37,35 @@ interface IPaymentRouter {
   );
 
   /**
-   * Returns the properties of a PaymentRoute struct for _routeID
+   * @notice Returns the properties of a PaymentRoute struct for _routeID
    */
-  function paymentRouteID(bytes32 _routeID)
-    external
-    view
-    returns (
-      address,
-      uint16,
-      bool
-    );
+  function paymentRouteID(
+    bytes32 _routeID
+  ) external view returns (address,uint16,bool);
 
   /**
-   * @dev Returns a balance of tokens/stablecoins ready for collection
+   * @notice Returns a balance of tokens/stablecoins ready for collection
    *
    * @param _recipientAddress Address of recipient who can collect tokens
    * @param _tokenContract Contract address of tokens/stablecoins to be collected
    */
-  function tokenBalanceToCollect(address _recipientAddress, address _tokenContract)
-    external
-    view
-    returns (uint256);
+  function tokenBalanceToCollect(
+    address _recipientAddress,
+    address _tokenContract
+  ) external view returns (uint256);
 
   /**
-   * @dev Returns an array of all routeIDs created by an address
+   * @notice Returns an array of all routeIDs created by an address
+   * @param _creatorAddress Address of route creator
    */
   function creatorRoutes(address _creatorAddress) external view returns (bytes32[] memory);
 
   /**
-   *
+   * @notice External function to transfer tokens from msg.sender to all recipients[].
+   * @param _routeID Unique ID of payment route
+   * @param _tokenAddress Contract address of tokens being transferred
+   * @param _senderAddress Wallet address of token sender
+   * @param _amount Amount of tokens being routed
    */
   function pushTokens(
     bytes32 _routeID,
@@ -74,6 +74,16 @@ interface IPaymentRouter {
     uint256 _amount
   ) external returns (bool);
 
+  /**
+   * @notice External function that deposits and sorts tokens for collection, tokens are
+   * divided up by each recipient's commission rate
+   *
+   * @param _routeID Unique ID of payment route
+   * @param _tokenAddress Contract address of tokens being deposited for collection
+   * @param _senderAddress Address of token sender
+   * @param _amount Amount of tokens held in escrow by payment route
+   * @return success boolean
+   */
   function holdTokens(
     bytes32 _routeID,
     address _tokenAddress,
@@ -82,14 +92,15 @@ interface IPaymentRouter {
   ) external returns (bool);
 
   /**
-   * @dev Collects all earnings stored in PaymentRouter for msg.sender
+   * @notice Collects all earnings stored in PaymentRouter
    *
    * @param _tokenAddress Contract address of payment token to be collected
+   * @return success boolean
    */
   function pullTokens(address _tokenAddress) external returns (bool);
 
   /**
-   * @dev Opens a new payment route
+   * @notice Opens a new payment route
    *
    * @param _recipients Array of all recipient addresses for this payment route
    * @param _commissions Array of all recipients' commissions--in percentages with two decimals

@@ -1,15 +1,6 @@
-/**
- * PaymentRouter EXPERIMENTAL V2
- *
- * I've honestly made too many changes to keep track of. I did simplify the whole
- * system of holding tokens for collection. It no longer follows the PaymentSpltter
- * design at all and is WAY simpler.
- */
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-// import "../Dependencies/Address.sol";
 import "../Dependencies/Context.sol";
 import "../Dependencies/IERC20.sol";
 import "./IPaymentRouter.sol";
@@ -22,6 +13,9 @@ contract PaymentRouter is Context {
 
   // Fires when a route creator changes route tax
   event RouteTaxChanged(bytes32 routeID, uint16 newTax);
+
+  // Fires when a route tax bounds is changed
+  event RouteTaxBoundsChanged(uint16 minTax, uint16 maxTax);
 
   // Fires when a route has processed a push-transfer operation
   event TransferReceipt(
@@ -94,6 +88,7 @@ contract PaymentRouter is Context {
     }
     minTax = _minTax;
     maxTax = _maxTax;
+    emit RouteTaxBoundsChanged(_minTax, _maxTax);
   }
 
   /**
@@ -113,7 +108,7 @@ contract PaymentRouter is Context {
   /**
    * @dev Checks that need to be run when a payment route is created..
    *
-   * Requirements to pass this modifier:
+   * @dev Requirements to pass this modifier:
    * - _recipients and _commissions arrays must be same length
    * - No recipient is address(0)
    * - Commissions are greater than 0% but less than 100%
@@ -144,7 +139,7 @@ contract PaymentRouter is Context {
    * _pushTokens() and _holdTokens() when a payment is made to auto-adjust the
    * routeTax if the developers change it.
    *
-   * The only situation this does not cover is when maxTax is raised or minTax is
+   * @dev The only situation this does not cover is when maxTax is raised or minTax is
    * reduced.
    */
   modifier checkRouteTax(bytes32 _routeID) {
@@ -162,8 +157,9 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev External function to transfer tokens from msg.sender to all recipients[].
-   * The size of each payment is determined by commissions[i]/10000, which added up
+   * @notice External function to transfer tokens from msg.sender to all recipients[].
+   *
+   * @dev The size of each payment is determined by commissions[i]/10000, which added up
    * will always equal 10000. The first minTax units are transferred to the treasury. This
    * function is a push design that will incur higher gas costs on the user, but
    * is more convenient for the creators.
@@ -173,7 +169,7 @@ contract PaymentRouter is Context {
    * @param _senderAddress Wallet address of token sender
    * @param _amount Amount of tokens being routed
    *
-   * note If any of the transfers should fail for whatever reason, then the transaction should
+   * @dev If any of the transfers should fail for whatever reason, then the transaction should
    * *not* revert. Instead, it will run _storeFailedTransfer which holds on to the recipient's
    * tokens until they are collected. This also throws the TransferReceipt event.
    */
@@ -201,7 +197,7 @@ contract PaymentRouter is Context {
     // Transfer tokens from contract to route.recipients[i]:
     for (uint256 i = 0; i < route.commissions.length; i++) {
       payment = (totalAmount * route.commissions[i]) / 10000;
-      // If transferFrom() fails:
+      // If transfer() fails:
       if (!IERC20(_tokenAddress).transfer(route.recipients[i], payment)) {
         // Emit failure event alerting recipient they have tokens to collect
         emit TransferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
@@ -214,19 +210,17 @@ contract PaymentRouter is Context {
     // Emit a TransferReceipt event to all recipients
     emit TransferReceipt(_senderAddress, _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
     return true;
-    /*
-     */
   }
 
   /**
-   * @dev External function that deposits and sorts tokens for collection, tokens are
+   * @notice External function that deposits and sorts tokens for collection, tokens are
    * divided up by each recipient's commission rate
    *
    * @param _routeID Unique ID of payment route
    * @param _tokenAddress Contract address of tokens being deposited for collection
    * @param _senderAddress Address of token sender
    * @param _amount Amount of tokens held in escrow by payment route
-   * @return success Success boolean
+   * @return success boolean
    */
   function holdTokens(
     bytes32 _routeID,
@@ -262,16 +256,13 @@ contract PaymentRouter is Context {
     // Fire event alerting recipients they have tokens to collect
     emit TokensHeld(_routeID, _tokenAddress, _amount);
     return true;
-    /*
-     */
   }
 
   /**
-   * @dev Collects all earnings stored in PaymentRouter
-   *
-   * This is an upgraded version of the main, much simpler and makes the contract smaller.
+   * @notice Collects all earnings stored in PaymentRouter
    *
    * @param _tokenAddress Contract address of payment token to be collected
+   * @return success boolean
    */
   function pullTokens(address _tokenAddress) external returns (bool) {
     // Store recipient's balance as their payment
@@ -290,7 +281,7 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev Opens a new payment route
+   * @notice Opens a new payment route
    *
    * @param _recipients Array of all recipient addresses for this payment route
    * @param _commissions Array of all recipients' commissions--in percentages with two decimals
@@ -328,11 +319,12 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev Function for calculating the routeID of a payment route.
+   * @notice Function for calculating the routeID of a payment route.
    *
    * @param _routeCreator Address of payment route's creator
    * @param _recipients Array of all commission recipients
    * @param _commissions Array of all commissions relative to _recipients
+   * @return routeID Calculated routeID
    */
   function getPaymentRouteID(
     address _routeCreator,
@@ -343,16 +335,17 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev Returns a list of the caller's created payment routes
+   * @notice Returns a list of the caller's created payment routes
    */
   function getMyPaymentRoutes() public view returns (bytes32[] memory) {
     return creatorRoutes[msg.sender];
   }
 
   /**
-   * @dev Adjusts the tax applied to a payment route. Only a route creator should be allowed to
-   * change this, and the platform should respond accordingly. In this way, route creators set
-   * their own platform taxes, and we cater to those who pay us more.
+   * @notice Adjusts the tax applied to a payment route.
+   * @dev Only a route creator should be allowed to change this, and the platform
+   * should respond accordingly. In this way, route creators set their own platform
+   * taxes, and we cater to those who pay us more.
    *
    * If a route creator chooses to pay a higher tax, then the platform's search algorithm will
    * place items tied to that route higher on the search results.
@@ -365,6 +358,7 @@ contract PaymentRouter is Context {
     require(_newTax <= maxTax, "Maximum tax exceeded");
 
     paymentRouteID[_routeID].routeTax = _newTax;
+
     // Emit event so all recipients can be notified of the routeTax change
     emit RouteTaxChanged(_routeID, _newTax);
     return true;
@@ -372,9 +366,6 @@ contract PaymentRouter is Context {
 
   /**
    * @dev This function allows us to set the min/max tax bounds that can be set by a creator
-   *
-   * note As of version 0.1.2 all route taxes will be automatically updated at the moment of
-   * purchase if they do not meet the bounds.
    */
   function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev {
     require(_minTax >= 0, "Minimum tax < 0.00%");
@@ -383,6 +374,6 @@ contract PaymentRouter is Context {
     minTax = _minTax;
     maxTax = _maxTax;
 
-    //EVENT NEEDED!
+    emit RouteTaxBoundsChanged(_minTax, _maxTax);
   }
 }
