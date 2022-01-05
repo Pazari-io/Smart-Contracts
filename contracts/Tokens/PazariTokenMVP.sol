@@ -126,14 +126,18 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   function ownsToken(uint256[] memory _tokenIDs, address _owner)
     public
     view
-    returns (bool[] memory hasToken)
+    returns (bool[] memory)
   {
+    bool[] memory hasToken = new bool[](_tokenIDs.length);
     for (uint256 i = 0; i < _tokenIDs.length; i++) {
       uint256 tokenID = _tokenIDs[i];
       if (balanceOf(_owner, tokenID) != 0) {
         hasToken[i] = true;
-      } else hasToken[i] = false;
+      } else {
+        hasToken[i] = false;
+      }
     }
+    return hasToken;
   }
 
   /**
