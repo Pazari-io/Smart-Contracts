@@ -6,7 +6,6 @@
  * design at all and is WAY simpler.
  */
 
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -50,7 +49,7 @@ contract PaymentRouter is Context {
   event TokensCollected(address indexed recipient, address tokenAddress, uint256 amount);
 
   // Maps available payment token balance per recipient for pull function
-   // recipient address => token address => balance available to collect
+  // recipient address => token address => balance available to collect
   mapping(address => mapping(address => uint256)) public tokenBalanceToCollect;
 
   // Mapping for route ID to route data
@@ -80,7 +79,6 @@ contract PaymentRouter is Context {
 
   // Address of treasury contract where route taxes will be sent
   address public treasuryAddress;
-
 
   // For testing, just use accounts[0] (Truffle) for treasury and developers
   // ****LINK TO TREASURY CONTRACT, GRAB DEVELOPER LIST FROM THERE****
@@ -216,8 +214,8 @@ contract PaymentRouter is Context {
     // Emit a TransferReceipt event to all recipients
     emit TransferReceipt(_senderAddress, _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
     return true;
-/*
-*/
+    /*
+     */
   }
 
   /**
@@ -237,24 +235,23 @@ contract PaymentRouter is Context {
     uint256 _amount
   ) external checkRouteTax(_routeID) returns (bool) {
     PaymentRoute memory route = paymentRouteID[_routeID];
-    uint256  payment; // Each recipient's payment
+    uint256 payment; // Each recipient's payment
 
     // Calculate platform tax and taxedAmount
     uint256 tax = (_amount * route.routeTax) / 10000;
     uint256 taxedAmount = _amount - tax;
 
     // Calculate each recipient's payment, add to token balance mapping
-     // We + 1 to tokenBalanceToCollect as part of a gas-saving design that saves
-     // gas on never allowing the token balance mapping to reach 0, while also
-     // not counting against the user's actual token balance.
-    for (uint i = 0; i < route.commissions.length; i++) {
-      if(tokenBalanceToCollect[route.recipients[i]][_tokenAddress] == 0){
+    // We + 1 to tokenBalanceToCollect as part of a gas-saving design that saves
+    // gas on never allowing the token balance mapping to reach 0, while also
+    // not counting against the user's actual token balance.
+    for (uint256 i = 0; i < route.commissions.length; i++) {
+      if (tokenBalanceToCollect[route.recipients[i]][_tokenAddress] == 0) {
         tokenBalanceToCollect[route.recipients[i]][_tokenAddress] = 1;
       }
       payment = ((taxedAmount * route.commissions[i]) / 10000);
       tokenBalanceToCollect[route.recipients[i]][_tokenAddress] += payment;
     }
-
 
     // Transfer tokens from senderAddress to this contract
     IERC20(_tokenAddress).transferFrom(_senderAddress, address(this), _amount);
@@ -265,8 +262,8 @@ contract PaymentRouter is Context {
     // Fire event alerting recipients they have tokens to collect
     emit TokensHeld(_routeID, _tokenAddress, _amount);
     return true;
- /*
-*/
+    /*
+     */
   }
 
   /**
@@ -278,8 +275,8 @@ contract PaymentRouter is Context {
    */
   function pullTokens(address _tokenAddress) external returns (bool) {
     // Store recipient's balance as their payment
-   uint256 payment = tokenBalanceToCollect[_msgSender()][_tokenAddress] - 1;
-   require(payment > 0, "No payment to collect");
+    uint256 payment = tokenBalanceToCollect[_msgSender()][_tokenAddress] - 1;
+    require(payment > 0, "No payment to collect");
 
     // Erase recipient's balance
     tokenBalanceToCollect[_msgSender()][_tokenAddress] = 1; // Use 1 for 0 to save on gas

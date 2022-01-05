@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IPaymentRouter {
-
   // Fires when a new payment route is created
   event RouteCreated(address indexed creator, bytes32 routeID, address[] recipients, uint16[] commissions);
 
@@ -18,7 +17,7 @@ interface IPaymentRouter {
   // Fires when route is actived or deactivated
   event RouteToggled(bytes32 indexed routeID, bool isActive, uint256 timestamp);
 
-    // Fires when a route has processed a push-transfer operation
+  // Fires when a route has processed a push-transfer operation
   event TransferReceipt(
     address indexed sender,
     bytes32 routeID,
@@ -36,7 +35,6 @@ interface IPaymentRouter {
     uint256 timestamp,
     address recipient
   );
-
 
   /**
    * Returns the properties of a PaymentRoute struct for _routeID
@@ -56,17 +54,15 @@ interface IPaymentRouter {
    * @param _recipientAddress Address of recipient who can collect tokens
    * @param _tokenContract Contract address of tokens/stablecoins to be collected
    */
-  function tokenBalanceToCollect(
-    address _recipientAddress,
-    address _tokenContract
-    ) external view returns (uint256);
+  function tokenBalanceToCollect(address _recipientAddress, address _tokenContract)
+    external
+    view
+    returns (uint256);
 
   /**
    * @dev Returns an array of all routeIDs created by an address
    */
-  function creatorRoutes(
-    address _creatorAddress
-    ) external view returns (bytes32[] memory);
+  function creatorRoutes(address _creatorAddress) external view returns (bytes32[] memory);
 
   /**
    *
@@ -90,9 +86,7 @@ interface IPaymentRouter {
    *
    * @param _tokenAddress Contract address of payment token to be collected
    */
-  function pullTokens(
-    address _tokenAddress
-  ) external returns (bool);
+  function pullTokens(address _tokenAddress) external returns (bool);
 
   /**
    * @dev Opens a new payment route

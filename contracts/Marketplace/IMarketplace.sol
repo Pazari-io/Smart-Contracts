@@ -9,7 +9,7 @@
 pragma solidity ^0.8.0;
 
 interface IMarketplace {
-// EVENTS
+  // EVENTS
   // Fires when a MarketItem is sold;
   event MarketItemSold(uint256 indexed itemID, uint256 amount, address owner);
 
@@ -20,8 +20,8 @@ interface IMarketplace {
   event ItemSoldOut(uint256 indexed itemID);
 
   // Fires when forSale is toggled on or off for an itemID
-   // If forSale == true, then forSale was toggled on
-   // If forSale == false, then forSale was toggled off
+  // If forSale == true, then forSale was toggled on
+  // If forSale == false, then forSale was toggled off
   event ForSaleToggled(uint256 itemID, bool forSale);
 
   // Fires when a creator pulls a MarketItem's stock from the Marketplace
@@ -53,9 +53,9 @@ interface IMarketplace {
     uint256 itemLimit;
   }
 
-// FUNCTIONS
+  // FUNCTIONS
 
-/**
+  /**
    * @dev Creates a MarketItem struct and assigns it an itemID
    *
    * @param _tokenContract Token contract address of the item being sold
@@ -91,7 +91,7 @@ interface IMarketplace {
    *
    * note _index = itemID - 1
    */
-  function marketItems(uint256 _index) external returns(MarketItem memory);
+  function marketItems(uint256 _index) external returns (MarketItem memory);
 
   /**
    * @dev Purchases an _amount of market item itemID
@@ -148,7 +148,7 @@ interface IMarketplace {
     bool _isPush,
     bytes32 _routeID,
     uint256 _itemLimit
-   ) external returns (bool);
+  ) external returns (bool);
 
   /**
    * @dev Toggles whether an item is for sale or not
@@ -187,6 +187,9 @@ interface IMarketplace {
    * @param _tokenContract The contract address of the token being checked
    * @param _tokenID The token ID being checked
    */
-  function ownsToken(address _owner, address _tokenContract, uint256 _tokenID) external view returns (bool);
-
+  function ownsToken(
+    address _owner,
+    address _tokenContract,
+    uint256 _tokenID
+  ) external view returns (bool);
 }

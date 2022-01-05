@@ -73,12 +73,12 @@ contract Marketplace is ERC1155Holder, Context {
   MarketItem[] public marketItems;
 
   // Maps a seller's address to an array of all itemIDs they have created
-   // seller's address => itemIDs
+  // seller's address => itemIDs
   mapping(address => uint256[]) public sellersMarketItems;
 
   // Maps a contract's address and a token's ID to its corresponding itemId
-   // The purpose of this is to prevent duplicate items for same token
-   // tokenContract address + tokenID => itemID
+  // The purpose of this is to prevent duplicate items for same token
+  // tokenContract address + tokenID => itemID
   mapping(address => mapping(uint256 => uint256)) public tokenMap;
 
   // Address of PaymentRouter contract
@@ -217,7 +217,6 @@ contract Marketplace is ERC1155Holder, Context {
       _amount = IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID);
     }
 
-
     /* ========== EFFECTS ========== */
 
     // Store MarketItem data
@@ -235,8 +234,6 @@ contract Marketplace is ERC1155Holder, Context {
       _routeMutable
     );
 
-
-
     /* ========== INTERACTIONS ========== */
 
     // Transfer tokens from seller to Marketplace
@@ -245,7 +242,6 @@ contract Marketplace is ERC1155Holder, Context {
     // Check that Marketplace's internal balance matches the token's balanceOf() value
     MarketItem memory item = marketItems[itemID - 1];
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
-
   }
 
   /**
@@ -274,24 +270,24 @@ contract Marketplace is ERC1155Holder, Context {
     }
 
     // Add + 1 so itemID 0 will never exist and can be used for checks
-     // Just remember to use [itemID - 1] when accessing marketItems[]
+    // Just remember to use [itemID - 1] when accessing marketItems[]
     itemID = marketItems.length + 1;
 
     // Store new MarketItem in local variable
     MarketItem memory item = MarketItem(
-        itemID,
-        _tokenContract,
-        _tokenID,
-        _amount,
-        _ownerAddress,
-        _price,
-        _paymentContract,
-        _isPush,
-        _routeID,
-        _routeMutable,
-        _forSale,
-        _itemLimit
-     );
+      itemID,
+      _tokenContract,
+      _tokenID,
+      _amount,
+      _ownerAddress,
+      _price,
+      _paymentContract,
+      _isPush,
+      _routeID,
+      _routeMutable,
+      _forSale,
+      _itemLimit
+    );
 
     // Pushes MarketItem to marketItems[]
     marketItems.push(item);
@@ -336,8 +332,8 @@ contract Marketplace is ERC1155Holder, Context {
     // Pull data from itemID's MarketItem struct
     MarketItem memory item = marketItems[_itemID - 1];
     // If _amount == 0, then purchase the itemLimit - balanceOf(buyer)
-     // This simplifies logic for purchasing itemLimit on front-end
-    if(_amount == 0){
+    // This simplifies logic for purchasing itemLimit on front-end
+    if (_amount == 0) {
       _amount = item.itemLimit - IERC1155(item.tokenContract).balanceOf(msg.sender, item.tokenID);
     }
     // Define total cost of purchase
@@ -379,7 +375,7 @@ contract Marketplace is ERC1155Holder, Context {
     IERC20(item.paymentContract).approve(address(paymentRouter), totalCost);
 
     // Send ERC20 tokens through PaymentRouter, isPush determines which function is used
-     // note PaymentRouter functions make external calls to ERC20 contracts, thus they are interactions
+    // note PaymentRouter functions make external calls to ERC20 contracts, thus they are interactions
     item.isPush
       ? paymentRouter.pushTokens(item.routeID, item.paymentContract, address(this), totalCost) // Pushes tokens to recipients
       : paymentRouter.holdTokens(item.routeID, item.paymentContract, address(this), totalCost); // Holds tokens for pull collection
@@ -548,9 +544,9 @@ contract Marketplace is ERC1155Holder, Context {
   }
 
   // DELETE BEFORE PRODUCTION, USED FOR MIGRATION TESTING ONLY
-   function getNextItemID() public view returns (uint256 itemID) {
-     itemID = marketItems.length + 1;
-   }
+  function getNextItemID() public view returns (uint256 itemID) {
+    itemID = marketItems.length + 1;
+  }
 
   /**
    * @dev Returns an array of all items for sale on marketplace
@@ -609,7 +605,7 @@ contract Marketplace is ERC1155Holder, Context {
   function getMarketItems(uint256[] memory _itemIDs) public view returns (MarketItem[] memory marketItems_) {
     marketItems_ = new MarketItem[](_itemIDs.length);
     for (uint256 i = 0; i < _itemIDs.length; i++) {
-        marketItems_[i] = marketItems[_itemIDs[i]];
+      marketItems_[i] = marketItems[_itemIDs[i]];
     }
   }
 
@@ -620,11 +616,13 @@ contract Marketplace is ERC1155Holder, Context {
    * @param _tokenContract The contract address of the token being checked
    * @param _tokenID The token ID being checked
    */
-  function ownsToken(address _owner, address _tokenContract, uint256 _tokenID) public view returns (bool hasToken) {
+  function ownsToken(
+    address _owner,
+    address _tokenContract,
+    uint256 _tokenID
+  ) public view returns (bool hasToken) {
     if (IERC1155(_tokenContract).balanceOf(_owner, _tokenID) != 0) {
       hasToken = true;
-    }
-    else hasToken = false;
+    } else hasToken = false;
   }
-
 }
