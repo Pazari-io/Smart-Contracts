@@ -1,9 +1,19 @@
+/**
+ * PaymentRouter EXPERIMENTAL V2
+ *
+ * I've honestly made too many changes to keep track of. I did simplify the whole
+ * system of holding tokens for collection. It no longer follows the PaymentSpltter
+ * design at all and is WAY simpler.
+ */
+
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 // import "../Dependencies/Address.sol";
 import "../Dependencies/Context.sol";
 import "../Dependencies/IERC20.sol";
+import "./IPaymentRouter.sol";
 
 contract PaymentRouter is Context {
   // ****PAYMENT ROUTES****
@@ -13,33 +23,6 @@ contract PaymentRouter is Context {
 
   // Fires when a route creator changes route tax
   event RouteTaxChanged(bytes32 routeID, uint16 newTax);
-
-  // Tax rate paid by a route
-  // route ID => tax rate
-  //mapping(bytes32 => uint16) public routeTax;
-
-  // Min and max tax rates that routes must meet
-  uint16 public minTax;
-  uint16 public maxTax;
-
-  // Mapping for route ID to route data
-  // route ID => payment route
-  mapping(bytes32 => PaymentRoute) public paymentRouteID;
-
-  // Mapping of all routeIDs created by a route creator address
-  // creator's address => routeIDs
-  mapping(address => bytes32[]) public creatorRoutes;
-
-  // Struct that defines a new PaymentRoute
-  struct PaymentRoute {
-    address routeCreator; // Address of payment route creator
-    address[] recipients; // Recipients in this payment route
-    uint16[] commissions; // Commissions for each recipient--in fractions of 10000
-    uint16 routeTax; // Tax paid by this route
-    bool isActive; // Is route currently active?
-  }
-
-  // ****PUSH FUNCTIONS****
 
   // Fires when a route has processed a push-transfer operation
   event TransferReceipt(
@@ -60,38 +43,44 @@ contract PaymentRouter is Context {
     address recipient
   );
 
-  // Mapping of ERC20 tokens that failed a push-transfer and are being held for recipient
-  // recipient address => token address => held tokens
-  mapping(address => mapping(address => uint256)) internal failedTokens;
-
-  // ****PULL FUNCTIONS****
-
-  // Mapping for total balance of tokens that are currently being held by a payment route
-  // route ID => token address => token balance
-  mapping(bytes32 => mapping(address => uint256)) internal routeTokenBalance;
-
-  // Mapping for amount of tokens that have been released from holding by a payment route
-  // route ID => token address => amount released
-  mapping(bytes32 => mapping(address => uint256)) internal routeTokensReleased;
-
-  // Mapping of tokens released from holding by recipient
-  // recipient address => routeID => token address => amount released
-  mapping(address => mapping(bytes32 => mapping(address => uint256))) internal recipTokensReleased;
-
   // Fires when tokens are deposited into a payment route for holding
   event TokensHeld(bytes32 routeID, address tokenAddress, uint256 amount);
 
   // Fires when tokens are collected from holding by a recipient
-  event PaymentReleased(address indexed recipient, bytes32 routeID, address tokenAddress, uint256 amount);
+  event TokensCollected(address indexed recipient, address tokenAddress, uint256 amount);
 
-  // ****DEVELOPERS****
+  // Maps available payment token balance per recipient for pull function
+   // recipient address => token address => balance available to collect
+  mapping(address => mapping(address => uint256)) public tokenBalanceToCollect;
 
-  // Address of treasury contract where route taxes will be sent
-  address public treasuryAddress;
+  // Mapping for route ID to route data
+  // route ID => payment route
+  mapping(bytes32 => PaymentRoute) public paymentRouteID;
+
+  // Mapping of all routeIDs created by a route creator address
+  // creator's address => routeIDs
+  mapping(address => bytes32[]) public creatorRoutes;
 
   // Mapping that tracks if an address is a developer
   // ****REMOVE BEFORE DEPLOYMENT****
   mapping(address => bool) public isDev;
+
+  // Struct that defines a new PaymentRoute
+  struct PaymentRoute {
+    address routeCreator; // Address of payment route creator
+    address[] recipients; // Recipients in this payment route
+    uint16[] commissions; // Commissions for each recipient--in fractions of 10000
+    uint16 routeTax; // Tax paid by this route
+    bool isActive; // Is route currently active?
+  }
+
+  // Min and max tax rates that routes must meet
+  uint16 public minTax;
+  uint16 public maxTax;
+
+  // Address of treasury contract where route taxes will be sent
+  address public treasuryAddress;
+
 
   // For testing, just use accounts[0] (Truffle) for treasury and developers
   // ****LINK TO TREASURY CONTRACT, GRAB DEVELOPER LIST FROM THERE****
@@ -150,25 +139,6 @@ contract PaymentRouter is Context {
     _;
   }
 
-  // ****DELETE BEFORE DEPLOYMENT****
-  function pushTokensTest(
-    bytes32 _routeID,
-    address _tokenAddress,
-    uint256 _amount
-  ) external returns (bool) {
-    pushTokens(_routeID, _tokenAddress, _amount);
-    return true;
-  }
-
-  // ****DELETE BEFORE DEPLOYMENT****
-  function holdTokensTest(
-    bytes32 _routeID,
-    address _tokenAddress,
-    uint256 _amount
-  ) external {
-    holdTokens(_routeID, _tokenAddress, _amount);
-  }
-
   /**
    * @dev Checks that the routeTax conforms to required bounds. If routeTax is less
    * than minTax or greater than maxTax then routeTax is updated to minTax or maxTax,
@@ -186,7 +156,7 @@ contract PaymentRouter is Context {
     if (route.routeTax < minTax) {
       route.routeTax = minTax;
     }
-    // Only sponsored items pay maxTax
+    // Only sponsor items pay maxTax
     if (route.routeTax > maxTax) {
       route.routeTax = maxTax;
     }
@@ -194,7 +164,7 @@ contract PaymentRouter is Context {
   }
 
   /**
-   * @dev Internal function to transfer tokens from msg.sender to all recipients[].
+   * @dev External function to transfer tokens from msg.sender to all recipients[].
    * The size of each payment is determined by commissions[i]/10000, which added up
    * will always equal 10000. The first minTax units are transferred to the treasury. This
    * function is a push design that will incur higher gas costs on the user, but
@@ -202,6 +172,7 @@ contract PaymentRouter is Context {
    *
    * @param _routeID Unique ID of payment route
    * @param _tokenAddress Contract address of tokens being transferred
+   * @param _senderAddress Wallet address of token sender
    * @param _amount Amount of tokens being routed
    *
    * note If any of the transfers should fail for whatever reason, then the transaction should
@@ -211,21 +182,15 @@ contract PaymentRouter is Context {
   function pushTokens(
     bytes32 _routeID,
     address _tokenAddress,
+    address _senderAddress,
     uint256 _amount
   ) public checkRouteTax(_routeID) returns (bool) {
     require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
 
-    //May not be necessary because this check is already in the ERC20 contract
-    require(
-      IERC20(_tokenAddress).allowance(_msgSender(), address(this)) >= _amount,
-      "Insufficient allowance"
-    );
-
-    // Let's make this simpler to access
+    // Store PaymentRoute struct into local variable
     PaymentRoute memory route = paymentRouteID[_routeID];
-
     // Transfer full _amount from buyer to contract
-    IERC20(_tokenAddress).transferFrom(_msgSender(), address(this), _amount);
+    IERC20(_tokenAddress).transferFrom(_senderAddress, address(this), _amount);
 
     // Transfer route tax first
     uint256 tax = (_amount * route.routeTax) / 10000;
@@ -241,113 +206,89 @@ contract PaymentRouter is Context {
       // If transferFrom() fails:
       if (!IERC20(_tokenAddress).transfer(route.recipients[i], payment)) {
         // Emit failure event alerting recipient they have tokens to collect
-        // If we want to slim down on events, then use tokensHeld event instead
         emit TransferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
         // Store tokens in contract for holding until recipient collects them
-        _storeFailedTransfer(_tokenAddress, route.recipients[i], payment);
+        tokenBalanceToCollect[_senderAddress][_tokenAddress] += payment;
         continue; // Continue to next recipient
       }
     }
 
     // Emit a TransferReceipt event to all recipients
-    emit TransferReceipt(_msgSender(), _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
+    emit TransferReceipt(_senderAddress, _routeID, _tokenAddress, totalAmount, tax, block.timestamp);
     return true;
+/*
+*/
   }
 
   /**
-   * @dev Internal function that accepts ERC20 tokens and escrows them until pulled by payment route recipients
+   * @dev External function that deposits and sorts tokens for collection, tokens are
+   * divided up by each recipient's commission rate
    *
    * @param _routeID Unique ID of payment route
+   * @param _tokenAddress Contract address of tokens being deposited for collection
+   * @param _senderAddress Address of token sender
    * @param _amount Amount of tokens held in escrow by payment route
-   * @param _tokenAddress Contract address of tokens being escrowed
    * @return success Success boolean
-   *
-   * note This function automatically pushes tokens to the treasury contract.
    */
   function holdTokens(
     bytes32 _routeID,
     address _tokenAddress,
+    address _senderAddress,
     uint256 _amount
-  ) public checkRouteTax(_routeID) returns (bool) {
-    // Calculate treasury's commission from _amount
-    uint256 tax = (_amount * paymentRouteID[_routeID].routeTax) / 10000;
+  ) external checkRouteTax(_routeID) returns (bool) {
+    PaymentRoute memory route = paymentRouteID[_routeID];
+    uint256  payment; // Each recipient's payment
 
-    // Increase payment route's token balance by _amount - tax
-    routeTokenBalance[_routeID][_tokenAddress] += _amount - tax;
+    // Calculate platform tax and taxedAmount
+    uint256 tax = (_amount * route.routeTax) / 10000;
+    uint256 taxedAmount = _amount - tax;
 
-    // Transfer tokens from buyer to this contract
-    IERC20(_tokenAddress).transferFrom(_msgSender(), address(this), _amount);
+    // Calculate each recipient's payment, add to token balance mapping
+     // We + 1 to tokenBalanceToCollect as part of a gas-saving design that saves
+     // gas on never allowing the token balance mapping to reach 0, while also
+     // not counting against the user's actual token balance.
+    for (uint i = 0; i < route.commissions.length; i++) {
+      if(tokenBalanceToCollect[route.recipients[i]][_tokenAddress] == 0){
+        tokenBalanceToCollect[route.recipients[i]][_tokenAddress] = 1;
+      }
+      payment = ((taxedAmount * route.commissions[i]) / 10000);
+      tokenBalanceToCollect[route.recipients[i]][_tokenAddress] += payment;
+    }
 
-    // Transfer treasury's commission from this contract to treasury contract
+
+    // Transfer tokens from senderAddress to this contract
+    IERC20(_tokenAddress).transferFrom(_senderAddress, address(this), _amount);
+
+    // Transfer treasury's commission from this contract to treasuryAddress
     IERC20(_tokenAddress).transfer(treasuryAddress, tax);
 
     // Fire event alerting recipients they have tokens to collect
     emit TokensHeld(_routeID, _tokenAddress, _amount);
     return true;
+ /*
+*/
   }
-
-  // Stores tokens that failed the push-transfer operation
-  function _storeFailedTransfer(
-    address _tokenAddress,
-    address _recipient,
-    uint256 _amount
-  ) internal {
-    failedTokens[_recipient][_tokenAddress] += _amount;
-  }
-
-  // Collects tokens that failed the push-transfer operation
-  function collectFailedTransfer(address _tokenAddress) external returns (bool) {
-    uint256 amount;
-    amount = failedTokens[_msgSender()][_tokenAddress];
-    require(IERC20(_tokenAddress).transfer(_msgSender(), amount), "Transfer failed!");
-
-    //EVENT NEEDED!
-
-    assert(failedTokens[_msgSender()][_tokenAddress] == 0);
-    return true;
-  }
-
-  // Maps a recipient's array index value to the routeID and their address
-  // routeID => recipient address => array index
-  mapping(bytes32 => mapping(address => uint8)) public recipIndex;
 
   /**
-   * @dev Function for pulling held tokens to recipient
+   * @dev Collects all earnings stored in PaymentRouter
    *
-   * @param _routeID Payment route ID
-   * @param _tokenAddress Contract address of ERC20 tokens
+   * This is an upgraded version of the main, much simpler and makes the contract smaller.
    *
+   * @param _tokenAddress Contract address of payment token to be collected
    */
-  function pullTokens(bytes32 _routeID, address _tokenAddress) external returns (bool) {
-    uint16 commission; // Commission rate for recipient
-    address recipient; // Recipient pulling tokens
-    uint8 recipIndex_ = recipIndex[_routeID][_msgSender()]; // PaymentRoute array index for recipient
+  function pullTokens(address _tokenAddress) external returns (bool) {
+    // Store recipient's balance as their payment
+   uint256 payment = tokenBalanceToCollect[_msgSender()][_tokenAddress] - 1;
+   require(payment > 0, "No payment to collect");
 
-    recipient = paymentRouteID[_routeID].recipients[recipIndex_];
-    commission = paymentRouteID[_routeID].commissions[recipIndex_];
-
-    require(recipient != address(0) && commission != 0, "Recipient not found!");
-
-    // The route's current token balance combined with the total amount it has released
-    uint256 totalReceived = routeTokenBalance[_routeID][_tokenAddress] +
-      routeTokensReleased[_routeID][_tokenAddress];
-
-    // Recipient's due payment
-    uint256 payment = ((totalReceived * commission) / 10000) -
-      recipTokensReleased[recipient][_routeID][_tokenAddress];
-
-    require(payment != 0, "Recipient is not due payment");
-
-    // Update holding balance mappings
-    recipTokensReleased[recipient][_routeID][_tokenAddress] += payment;
-    routeTokensReleased[_routeID][_tokenAddress] += payment;
-    routeTokenBalance[_routeID][_tokenAddress] -= payment;
+    // Erase recipient's balance
+    tokenBalanceToCollect[_msgSender()][_tokenAddress] = 1; // Use 1 for 0 to save on gas
 
     // Call token contract and transfer balance from this contract to recipient
     require(IERC20(_tokenAddress).transfer(msg.sender, payment), "Transfer failed");
 
-    // Emit a PaymentReleased event as a recipient's receipt
-    emit PaymentReleased(msg.sender, _routeID, _tokenAddress, payment);
+    // Emit a TokensCollected event as a recipient's receipt
+    emit TokensCollected(msg.sender, _tokenAddress, payment);
     return true;
   }
 
@@ -372,21 +313,21 @@ contract PaymentRouter is Context {
     // Maps the routeID to the address that created it, and pushes to creator's routes array
     creatorRoutes[_msgSender()].push(routeID);
 
-    // Assign recipIndex mapping values
-    for (uint8 i = 0; i < _recipients.length; i++) {
-      recipIndex[routeID][_recipients[i]] = i;
-    }
-
     emit RouteCreated(msg.sender, routeID, _recipients, _commissions);
   }
 
-  /**
-   * @dev Closes a payment route with ID _routeID
-   */
-  function closePaymentRoute(bytes32 _routeID) external onlyCreator(_routeID) {
-    paymentRouteID[_routeID].isActive = false;
+  event RouteToggled(bytes32 indexed routeID, bool isActive, uint256 timestamp);
 
-    //EVENT NEEDED!
+  /**
+   * @dev Toggles a payment route with ID _routeID
+   */
+  function togglePaymentRoute(bytes32 _routeID) external onlyCreator(_routeID) {
+    paymentRouteID[_routeID].isActive
+      ? paymentRouteID[_routeID].isActive = false
+      : paymentRouteID[_routeID].isActive = true;
+
+    // If isActive == true, then route was re-opened, if isActive == false, then route was closed
+    emit RouteToggled(_routeID, paymentRouteID[_routeID].isActive, block.timestamp);
   }
 
   /**
