@@ -274,16 +274,20 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * arbitrary array of recipients for the airdrop.
    */
 
-    function airdropTokens(uint256 _tokenToDrop, uint256 _tokenToCheck, uint256 _amount) external onlyOwners returns (bool) {
-        address[] memory tokenHolders = tokenIDs[_tokenToCheck - 1].tokenHolders;
-        require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
+  function airdropTokens(
+    uint256 _tokenToDrop,
+    uint256 _tokenToCheck,
+    uint256 _amount
+  ) external onlyOwners returns (bool) {
+    address[] memory tokenHolders = tokenIDs[_tokenToCheck - 1].tokenHolders;
+    require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
 
-        for(uint i = 0; i < tokenHolders.length; i++){
-            if (tokenHolders[i] == address(0)) continue;
-            else _safeTransferFrom(_msgSender(), tokenHolders[i], _tokenToDrop, _amount, "");
-        }
-        return true;
+    for (uint256 i = 0; i < tokenHolders.length; i++) {
+      if (tokenHolders[i] == address(0)) continue;
+      else _safeTransferFrom(_msgSender(), tokenHolders[i], _tokenToDrop, _amount, "");
     }
+    return true;
+  }
 
   /**
    * -----------------------------------

@@ -39,9 +39,14 @@ interface IPaymentRouter {
   /**
    * @notice Returns the properties of a PaymentRoute struct for _routeID
    */
-  function paymentRouteID(
-    bytes32 _routeID
-  ) external view returns (address,uint16,bool);
+  function paymentRouteID(bytes32 _routeID)
+    external
+    view
+    returns (
+      address,
+      uint16,
+      bool
+    );
 
   /**
    * @notice Returns a balance of tokens/stablecoins ready for collection
@@ -49,10 +54,10 @@ interface IPaymentRouter {
    * @param _recipientAddress Address of recipient who can collect tokens
    * @param _tokenContract Contract address of tokens/stablecoins to be collected
    */
-  function tokenBalanceToCollect(
-    address _recipientAddress,
-    address _tokenContract
-  ) external view returns (uint256);
+  function tokenBalanceToCollect(address _recipientAddress, address _tokenContract)
+    external
+    view
+    returns (uint256);
 
   /**
    * @notice Returns an array of all routeIDs created by an address
