@@ -15,7 +15,7 @@
 
 const Marketplace = artifacts.require("Marketplace");
 const PaymentRouter = artifacts.require("PaymentRouter");
-const ERC20 = artifacts.require("ERC20");
+const ERC20 = artifacts.require("ERC20PresetMinterPauser");
 const PazariTokenMVP = artifacts.require("PazariTokenMVP");
 const FactoryPazariTokenMVP = artifacts.require("FactoryPazariTokenMVP");
 
@@ -37,8 +37,10 @@ module.exports = async function (deployer, network, accounts) {
   let market = await Marketplace.deployed();
 
   //DEPLOY STABLECOIN
-  await deployer.deploy(ERC20, "Magic Internet Money", "MIM", web3.utils.toWei("200"), { from: buyer });
+  // await deployer.deploy(ERC20, "Magic Internet Money", "MIM", web3.utils.toWei("200"), { from: buyer });
+  await deployer.deploy(ERC20, "Magic Internet Money", "MIM", { from: buyer });
   let stablecoin = await ERC20.deployed();
+  await stablecoin.mint(buyer, web3.utils.toWei("200"));
 
   //DEPLOY PAZARI TOKEN
   let contractOwners = [seller, router.address, market.address];
