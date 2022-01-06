@@ -70,7 +70,7 @@ const config: HardhatUserConfig = {
         version: "0.8.9",
         settings: {
           optimizer: {
-            enabled: true,
+            enabled: process.env.OPTIMIZER === "true",
             runs: 800,
           },
         },
