@@ -1,4 +1,9 @@
-import { ERC20PresetMinterPauser__factory, Marketplace__factory, PaymentRouter__factory, PazariTokenMVP__factory } from "../types";
+import {
+  ERC20PresetMinterPauser__factory,
+  Marketplace__factory,
+  PaymentRouter__factory,
+  PazariTokenMVP__factory,
+} from "../types";
 import { MacroChain } from "../utils";
 
 const main = async () => {
@@ -19,18 +24,18 @@ const main = async () => {
 
   //Deploy Marketplace
   const mp = await deploy(Marketplace__factory, {
-    args: [pr.address]
+    args: [pr.address],
   });
 
   //Deploy Mock Stablecoin
   const mim = await deploy(ERC20PresetMinterPauser__factory, {
-    args: ["Magic Internet Money", "MIM"]
+    args: ["Magic Internet Money", "MIM"],
   });
 
   //Deploy Pazari Token (ERC1155 like token)
-  const contractOwners = [seller.address, pr.address, mp.address]
+  const contractOwners = [seller.address, pr.address, mp.address];
   const token = await deploy(PazariTokenMVP__factory, {
-    args: [contractOwners]
+    args: [contractOwners],
   });
 
   await verifyDeployedContracts();
