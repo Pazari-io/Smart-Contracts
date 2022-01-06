@@ -3,6 +3,7 @@ import editJsonFile from "edit-json-file";
 import { ContractFactory } from "@ethersproject/contracts";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Time } from ".";
+import fs from "fs";
 
 type DeployParam<T extends ContractFactory> = Parameters<InstanceType<{ new (): T }>["deploy"]>;
 type ContractInstance<T extends ContractFactory> = ReturnType<InstanceType<{ new (): T }>["attach"]>;
@@ -17,8 +18,9 @@ export class MacroChain {
   public deployer: SignerWithAddress;
   public users: SignerWithAddress[];
   private deployedContracts: string[];
+  private globalLog: boolean | undefined;
 
-  constructor(signer: SignerWithAddress | SignerWithAddress[]) {
+  constructor(signer: SignerWithAddress | SignerWithAddress[], log?: boolean) {
     if (Array.isArray(signer)) {
       this.users = signer;
     } else {
@@ -26,11 +28,18 @@ export class MacroChain {
     }
     this.deployer = this.users[0];
     this.deployedContracts = [];
+    this.globalLog = log;
   }
 
-  static init = async (): Promise<MacroChain> => {
+  static init = async (
+    option: {
+      log?: boolean;
+    } = {
+      log: undefined,
+    },
+  ): Promise<MacroChain> => {
     const signers = await ethers.getSigners();
-    const macrochain = new MacroChain(signers);
+    const macrochain = new MacroChain(signers, option.log);
     return macrochain;
   };
 
@@ -41,14 +50,14 @@ export class MacroChain {
       args?: DeployParam<T>;
       log?: boolean;
     } = {
-      log: false,
+      log: undefined,
     },
   ): Promise<ContractInstance<T>> => {
     let macrochain: MacroChain;
     if (option.from) {
       macrochain = new MacroChain(option.from);
     } else {
-      macrochain = await this.init();
+      macrochain = await this.init({ log: option.log });
     }
     const contract = macrochain.deploy(contractFactory, option);
     return contract;
@@ -76,7 +85,7 @@ export class MacroChain {
 
     if (option.log === undefined) {
       const chainId = hre.network.config.chainId || 31337;
-      if (chainId !== 31337) {
+      if (chainId !== 31337 || this.globalLog === true) {
         option.log = true;
       } else {
         option.log = false;
@@ -95,7 +104,16 @@ export class MacroChain {
 
     if (option.log) {
       console.log("Confirmed!");
-      const file = editJsonFile("./cache/deploymentLogs.json");
+
+      const chainId = hre.network.config.chainId || 31337;
+      const dir = `./deployments/${chainId}`;
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, {
+          recursive: true,
+        });
+      }
+
+      const file = editJsonFile(dir + "/logs.json");
       const contractLog: ContractLog = {
         address: contract.address,
         txHash: contract.deployTransaction.hash,
@@ -109,19 +127,21 @@ export class MacroChain {
     return contract;
   };
 
-  getInstance = async <T extends ContractFactory>(
-    contractName: string,
+  connect = async <T extends ContractFactory>(
+    contractFactory: new () => T,
     newAddr?: string,
   ): Promise<ContractInstance<T>> => {
-    const contractFactory = (await ethers.getContractFactory(contractName, this.deployer)) as T;
+    const contractName = contractFactory.name.split("__")[0];
+    const factory = (await ethers.getContractFactory(contractName, this.deployer)) as T;
 
     if (newAddr) {
-      return contractFactory.attach(newAddr) as ContractInstance<T>;
+      return factory.attach(newAddr) as ContractInstance<T>;
     } else {
-      const file = editJsonFile("./cache/deploymentLogs.json");
+      const chainId = hre.network.config.chainId || 31337;
+      const file = editJsonFile(`./deployments/${chainId}/logs.json`);
       const addr = file.get(`${contractName}.address`);
       if (addr) {
-        return contractFactory.attach(addr) as ContractInstance<T>;
+        return factory.attach(addr) as ContractInstance<T>;
       } else {
         throw "Invalid contract name or contract address";
       }
@@ -142,7 +162,8 @@ export const verifyContract = async (...contracts: string[]): Promise<void> => {
   console.log("Begin verification...");
   console.log("(This will take some time. You can already interact with contract while you wait.)");
 
-  const file = editJsonFile("./cache/deploymentLogs.json");
+  const chainId = hre.network.config.chainId || 31337;
+  const file = editJsonFile(`./deployments/${chainId}/logs.json`);
   const { length } = contracts;
 
   await Time.fromMin(2).delay();

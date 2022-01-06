@@ -7,7 +7,7 @@ export const toBN = (value: number): BigNumber => {
 };
 
 export const toWei = (value: number, decimals: number = 18): BigNumber => {
-  const valueString = value.toString();
+  const valueString = value.toFixed(decimals);
   const valueWeiBN = ethers.utils.parseUnits(valueString, decimals);
   return valueWeiBN;
 };
