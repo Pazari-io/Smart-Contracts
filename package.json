@@ -26,6 +26,11 @@
     "clean": "rm -rf abi artifacts cache types",
     "check:push": "yarn format:fix && yarn lint:fix && yarn lint:sol"
   },
+  "lint-staged": {
+    "src/**/*.{ts,js,sol}": [
+      "prettier --write"
+    ]
+  },
   "author": "",
   "license": "ISC",
   "dependencies": {
