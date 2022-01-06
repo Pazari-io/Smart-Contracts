@@ -22,8 +22,7 @@ yarn-error.log
 yalc.lock
 
 contractsInfo.json
-deployments/hardhat
-deployments/localhost
+deployments/31337
 
 /.dapp
 abi

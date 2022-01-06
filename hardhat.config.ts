@@ -118,7 +118,7 @@ const config: HardhatUserConfig = {
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     currency: "USD",
-    enabled: process.env.REPORT_GAS_ENABLED === "true" ? true : false,
+    enabled: process.env.REPORT_GAS_ENABLED === "true",
     excludeContracts: [],
     src: "./contracts",
   },
