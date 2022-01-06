@@ -6,7 +6,7 @@
   "scripts": {
     "compile": "npx hardhat compile",
     "recompile": "yarn clean && npx hardhat compile",
-    "script:localhost": "npx hardhat run --network localhost",
+    "script:local": "npx hardhat run --network localhost",
     "script:rinkeby": "npx hardhat run --network rinkeby",
     "script:fuji": "npx hardhat run --network fuji",
     "script:avax": "npx hardhat run --network avax",
