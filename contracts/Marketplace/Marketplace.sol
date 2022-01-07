@@ -257,7 +257,8 @@ contract Marketplace is ERC1155Holder, Context {
     require(item.amount > 0, "Item sold out");
     require(_msgSender() != item.owner, "Can't buy your own item");
     require(
-      IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) + _amount <= item.itemLimit,
+      IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) + _amount <=
+        item.itemLimit,
       "Purchase exceeds item limit"
     );
 
@@ -292,7 +293,13 @@ contract Marketplace is ERC1155Holder, Context {
       : paymentRouter.holdTokens(item.routeID, item.paymentContract, address(this), totalCost); // Holds tokens for pull collection
 
     // Call market item's token contract and transfer token from Marketplace to buyer
-    IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
+    IERC1155(item.tokenContract).safeTransferFrom(
+      address(this),
+      _msgSender(),
+      item.tokenID,
+      _amount,
+      ""
+    );
 
     //assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
     return true;
@@ -315,7 +322,13 @@ contract Marketplace is ERC1155Holder, Context {
     emit ItemRestocked(_itemID, _amount);
 
     /* ========== INTERACTIONS ========== */
-    IERC1155(item.tokenContract).safeTransferFrom(item.owner, address(this), item.tokenID, _amount, "");
+    IERC1155(item.tokenContract).safeTransferFrom(
+      item.owner,
+      address(this),
+      item.tokenID,
+      _amount,
+      ""
+    );
 
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
   }
@@ -343,7 +356,13 @@ contract Marketplace is ERC1155Holder, Context {
     marketItems[_itemID].amount -= _amount;
 
     /* ========== INTERACTIONS ========== */
-    IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
+    IERC1155(item.tokenContract).safeTransferFrom(
+      address(this),
+      _msgSender(),
+      item.tokenID,
+      _amount,
+      ""
+    );
 
     emit StockPulled(_itemID, _amount);
 
@@ -498,7 +517,11 @@ contract Marketplace is ERC1155Holder, Context {
   /**
    * @notice Returns an array of MarketItem structs given an arbitrary array of _itemIDs.
    */
-  function getMarketItems(uint256[] memory _itemIDs) public view returns (MarketItem[] memory marketItems_) {
+  function getMarketItems(uint256[] memory _itemIDs)
+    public
+    view
+    returns (MarketItem[] memory marketItems_)
+  {
     marketItems_ = new MarketItem[](_itemIDs.length);
     for (uint256 i = 0; i < _itemIDs.length; i++) {
       marketItems_[i] = marketItems[_itemIDs[i] - 1];

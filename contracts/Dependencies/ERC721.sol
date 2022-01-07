@@ -147,7 +147,13 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
   /**
    * @dev See {IERC721-isApprovedForAll}.
    */
-  function isApprovedForAll(address owner, address operator) public view virtual override returns (bool) {
+  function isApprovedForAll(address owner, address operator)
+    public
+    view
+    virtual
+    override
+    returns (bool)
+  {
     return _operatorApprovals[owner][operator];
   }
 
@@ -160,7 +166,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     uint256 tokenId
   ) public virtual override {
     //solhint-disable-next-line max-line-length
-    require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+    require(
+      _isApprovedOrOwner(_msgSender(), tokenId),
+      "ERC721: transfer caller is not owner nor approved"
+    );
 
     _transfer(from, to, tokenId);
   }
@@ -185,7 +194,10 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     uint256 tokenId,
     bytes memory _data
   ) public virtual override {
-    require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
+    require(
+      _isApprovedOrOwner(_msgSender(), tokenId),
+      "ERC721: transfer caller is not owner nor approved"
+    );
     _safeTransfer(from, to, tokenId, _data);
   }
 
@@ -239,10 +251,17 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
    *
    * - `tokenId` must exist.
    */
-  function _isApprovedOrOwner(address spender, uint256 tokenId) internal view virtual returns (bool) {
+  function _isApprovedOrOwner(address spender, uint256 tokenId)
+    internal
+    view
+    virtual
+    returns (bool)
+  {
     require(_exists(tokenId), "ERC721: operator query for nonexistent token");
     address owner = ERC721.ownerOf(tokenId);
-    return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
+    return (spender == owner ||
+      getApproved(tokenId) == spender ||
+      isApprovedForAll(owner, spender));
   }
 
   /**
@@ -381,7 +400,9 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     bytes memory _data
   ) private returns (bool) {
     if (to.isContract()) {
-      try IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, _data) returns (bytes4 retval) {
+      try IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, _data) returns (
+        bytes4 retval
+      ) {
         return retval == IERC721Receiver(to).onERC721Received.selector;
       } catch (bytes memory reason) {
         if (reason.length == 0) {

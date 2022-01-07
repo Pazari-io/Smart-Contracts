@@ -3,7 +3,12 @@ pragma solidity ^0.8.0;
 
 interface IPaymentRouter {
   // Fires when a new payment route is created
-  event RouteCreated(address indexed creator, bytes32 routeID, address[] recipients, uint16[] commissions);
+  event RouteCreated(
+    address indexed creator,
+    bytes32 routeID,
+    address[] recipients,
+    uint16[] commissions
+  );
 
   // Fires when a route creator changes route tax
   event RouteTaxChanged(bytes32 routeID, uint16 newTax);
