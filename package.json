@@ -6,7 +6,7 @@
   "scripts": {
     "compile": "npx hardhat compile",
     "recompile": "yarn clean && npx hardhat compile",
-    "script:localhost": "npx hardhat run --network localhost",
+    "script:local": "npx hardhat run --network localhost",
     "script:rinkeby": "npx hardhat run --network rinkeby",
     "script:fuji": "npx hardhat run --network fuji",
     "script:avax": "npx hardhat run --network avax",
@@ -25,6 +25,11 @@
     "typechain": "TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
     "clean": "rm -rf abi artifacts cache types",
     "check:push": "yarn format:fix && yarn lint:fix && yarn lint:sol"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,js,sol}": [
+      "prettier --write"
+    ]
   },
   "author": "",
   "license": "ISC",

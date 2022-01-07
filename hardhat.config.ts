@@ -70,7 +70,7 @@ const config: HardhatUserConfig = {
         version: "0.8.9",
         settings: {
           optimizer: {
-            enabled: true,
+            enabled: process.env.OPTIMIZER === "true",
             runs: 800,
           },
         },
@@ -113,12 +113,12 @@ const config: HardhatUserConfig = {
     timeout: 20000,
   },
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: process.env.SNOWTRACE_API_KEY,
   },
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     currency: "USD",
-    enabled: process.env.REPORT_GAS_ENABLED === "true" ? true : false,
+    enabled: process.env.REPORT_GAS_ENABLED === "true",
     excludeContracts: [],
     src: "./contracts",
   },
