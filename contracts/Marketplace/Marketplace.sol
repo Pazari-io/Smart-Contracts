@@ -473,7 +473,7 @@ contract Marketplace is ERC1155Holder, Context {
       }
     }
     // Return the array of unsold items
-    return (items);
+    return items;
   }
 
   /**
@@ -489,7 +489,7 @@ contract Marketplace is ERC1155Holder, Context {
 
     for (i = 0; j < unsoldItemCount || i < itemCount; i++) {
       if (marketItems[i].forSale) {
-        itemIDs[j] = i; // Assign unsoldItem to items[j]
+        itemIDs[j] = marketItems[i].itemID; // Assign unsoldItem to items[j]
         j++; // Increment j
       }
     }
