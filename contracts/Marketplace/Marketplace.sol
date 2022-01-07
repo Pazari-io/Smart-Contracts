@@ -501,7 +501,7 @@ contract Marketplace is ERC1155Holder, Context {
   function getMarketItems(uint256[] memory _itemIDs) public view returns (MarketItem[] memory marketItems_) {
     marketItems_ = new MarketItem[](_itemIDs.length);
     for (uint256 i = 0; i < _itemIDs.length; i++) {
-      marketItems_[i] = marketItems[_itemIDs[i]];
+      marketItems_[i] = marketItems[_itemIDs[i] - 1];
     }
   }
 
