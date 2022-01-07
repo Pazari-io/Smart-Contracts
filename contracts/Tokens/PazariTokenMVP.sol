@@ -123,11 +123,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * token ownership across a range of _tokenIDs for whoever connects their wallet.
    */
 
-  function ownsToken(uint256[] memory _tokenIDs, address _owner)
-    public
-    view
-    returns (bool[] memory)
-  {
+  function ownsToken(uint256[] memory _tokenIDs, address _owner) public view returns (bool[] memory) {
     bool[] memory hasToken = new bool[](_tokenIDs.length);
     for (uint256 i = 0; i < _tokenIDs.length; i++) {
       uint256 tokenID = _tokenIDs[i];
@@ -179,14 +175,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   ) internal returns (uint256) {
     address[] memory tokenHolders;
     uint256 tokenID = tokenProps.length + 1;
-    TokenProps memory newToken = TokenProps(
-      tokenID,
-      _newURI,
-      _amount,
-      _supplyCap,
-      _isMintable,
-      tokenHolders
-    );
+    TokenProps memory newToken = TokenProps(tokenID, _newURI, _amount, _supplyCap, _isMintable, tokenHolders);
     tokenProps.push(newToken);
 
     require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
@@ -242,10 +231,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     require(tokenProperties.totalSupply > 0, "Token does not exist");
     if (tokenProperties.supplyCap != 0) {
       // Check that new amount does not exceed the supply cap
-      require(
-        tokenProperties.totalSupply + _amount <= tokenProperties.supplyCap,
-        "Amount exceeds cap"
-      );
+      require(tokenProperties.totalSupply + _amount <= tokenProperties.supplyCap, "Amount exceeds cap");
     }
     _mint(_mintTo, _tokenID, _amount, "");
     return true;
@@ -268,10 +254,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     uint256 j; // Recipients counter
     // Iterate through each tokenID:
     for (i = 0; i < _tokenIDs.length; i++) {
-      require(
-        balanceOf(_msgSender(), _tokenIDs[i]) >= _recipients.length,
-        "Not enough tokens for airdrop"
-      );
+      require(balanceOf(_msgSender(), _tokenIDs[i]) >= _recipients.length, "Not enough tokens for airdrop");
       // Iterate through recipients, transfer tokenID if recipient != address(0)
       for (j = 0; j < _recipients.length; j++) {
         if (_recipients[j] == address(0)) continue;
@@ -294,10 +277,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     uint256 _amount
   ) external onlyOwners returns (bool) {
     address[] memory tokenHolders = tokenProps[_tokenToCheck - 1].tokenHolders;
-    require(
-      balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount,
-      "Insufficient tokens"
-    );
+    require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
 
     for (uint256 i = 0; i < tokenHolders.length; i++) {
       if (tokenHolders[i] == address(0)) continue;
@@ -403,13 +383,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   /**
    * @dev See {IERC1155-isApprovedForAll}.
    */
-  function isApprovedForAll(address account, address operator)
-    public
-    view
-    virtual
-    override
-    returns (bool)
-  {
+  function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
     return _operatorApprovals[account][operator];
   }
 
@@ -467,14 +441,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
 
     address operator = _msgSender();
 
-    _beforeTokenTransfer(
-      operator,
-      from,
-      to,
-      _asSingletonArray(id),
-      _asSingletonArray(amount),
-      data
-    );
+    _beforeTokenTransfer(operator, from, to, _asSingletonArray(id), _asSingletonArray(amount), data);
 
     uint256 fromBalance = _balances[id][from];
     require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
@@ -549,16 +516,11 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * their tokenOwnerIndex[] value will not be deleted, as it will be used to
    * put them back on the list of tokenOwners if they receive another token.
    */
-  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts)
-    external
-    returns (bool)
-  {
+  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool) {
     _burnBatch(msg.sender, _tokenIDs, _amounts);
     for (uint256 i = 0; i < _tokenIDs.length; i++) {
       if (balanceOf(msg.sender, _tokenIDs[i]) == 0) {
-        tokenProps[_tokenIDs[i] - 1].tokenHolders[
-          tokenOwnerIndex[msg.sender][_tokenIDs[i]]
-        ] = address(0);
+        tokenProps[_tokenIDs[i] - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenIDs[i]]] = address(0);
       }
     }
     return true;
@@ -643,14 +605,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
 
     address operator = _msgSender();
 
-    _beforeTokenTransfer(
-      operator,
-      account,
-      address(0),
-      _asSingletonArray(id),
-      _asSingletonArray(amount),
-      ""
-    );
+    _beforeTokenTransfer(operator, account, address(0), _asSingletonArray(id), _asSingletonArray(amount), "");
 
     uint256 accountBalance = _balances[id][account];
     require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
@@ -738,9 +693,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     bytes memory data
   ) private {
     if (to.isContract()) {
-      try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (
-        bytes4 response
-      ) {
+      try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
         if (response != IERC1155Receiver(to).onERC1155Received.selector) {
           revert("ERC1155: ERC1155Receiver rejected tokens");
         }

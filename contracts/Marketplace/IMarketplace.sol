@@ -174,10 +174,7 @@ interface IMarketplace {
   /**
    * @notice Returns an array of MarketItem structs given an array of _itemIDs.
    */
-  function getMarketItems(uint256[] memory _itemIDs)
-    external
-    view
-    returns (MarketItem[] memory marketItems_);
+  function getMarketItems(uint256[] memory _itemIDs) external view returns (MarketItem[] memory marketItems_);
 
   /**
    * @notice Checks if an address owns a tokenID from a token contract

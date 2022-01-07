@@ -15,10 +15,7 @@ pragma solidity ^0.8.0;
 import "../Tokens/PazariTokenMVP.sol";
 
 contract FactoryPazariTokenMVP {
-  function newPazariTokenMVP(address[] memory _contractOwners)
-    external
-    returns (address newContract)
-  {
+  function newPazariTokenMVP(address[] memory _contractOwners) external returns (address newContract) {
     PazariTokenMVP _newContract = new PazariTokenMVP(_contractOwners);
     newContract = address(_newContract);
   }
