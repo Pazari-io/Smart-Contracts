@@ -29,7 +29,7 @@
   },
   "lint-staged": {
     "*.{ts,js,sol}": [
-      "npx prettier --write ."
+      "npx prettier --write"
     ]
   },
   "author": "",
