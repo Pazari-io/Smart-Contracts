@@ -28,7 +28,7 @@
   },
   "lint-staged": {
     "src/**/*.{ts,js,sol}": [
-      "prettier --write"
+      "npx prettier --write ."
     ]
   },
   "author": "",

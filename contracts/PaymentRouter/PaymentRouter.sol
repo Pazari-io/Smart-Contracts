@@ -214,7 +214,7 @@ contract PaymentRouter is Context {
 
   /**
    * @notice External function that deposits and sorts tokens for collection, tokens are
-   * divided up by each recipient's commission rate
+   * divided up by each recipient's commission rate.
    *
    * @param _routeID Unique ID of payment route
    * @param _tokenAddress Contract address of tokens being deposited for collection
