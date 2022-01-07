@@ -13,7 +13,7 @@
     "test": "yarn test:dapp && yarn test:hh",
     "test:dapp": "dapp test",
     "test:hh": "npx hardhat test",
-    "test:truffle": "npx truffle build && npx truffle test",
+    "test:truffle": "npx truffle compile && npx truffle test",
     "lint": "eslint \"**/*.{js,ts}\" && solhint src/**/*.sol",
     "lint:fix": "eslint --fix \"**/*.{js,ts}\" && solhint --fix src/**/*.sol",
     "lint:sol": "solhint -f table contracts/**/*.sol",
