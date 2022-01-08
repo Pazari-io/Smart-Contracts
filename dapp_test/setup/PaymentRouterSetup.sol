@@ -9,7 +9,7 @@ import "../utils/MockContract.sol";
 import "../utils/DSTestExtended.sol";
 
 /* Import setups */
-import {UsersSetup} from "./UsersSetup.sol";
+import "./UsersSetup.sol";
 
 /* Import contracts */
 import {PaymentRouter} from "contracts/PaymentRouter/PaymentRouter.sol";
@@ -20,20 +20,21 @@ contract PaymentRouterSetup is DSTestExtended, UsersSetup {
   Hevm internal constant HEVM = Hevm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
   //Contracts
-  PaymentRouter paymentRouter;
+  PaymentRouter pr;
   ERC20PresetMinterPauser[] erc20s;
   address[] erc20sAddr;
 
   function setUp(uint8 numDevs, uint16 numUsers) public virtual override {
     //Set timestamp to 0
     HEVM.warp(0);
+    HEVM.roll(0);
 
     //Setup users
     UsersSetup.setUp(numDevs, numUsers);
   }
 
   function paymentRouterDeploy(uint16 minTax, uint16 maxTax) public virtual {
-    paymentRouter = new PaymentRouter(address(treasury), devsAddr, minTax, maxTax);
+    pr = new PaymentRouter(address(treasury), devsAddr, minTax, maxTax);
   }
 
   function erc20Deploy(uint8 amount) public virtual {

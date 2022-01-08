@@ -75,4 +75,18 @@ contract DSTestExtended is DSTest {
       assertEq(error, message);
     }
   }
+
+  function assertFalse(bool condition) internal {
+    if (condition) {
+      emit log("Error: Assertion Failed");
+      fail();
+    }
+  }
+
+  function assertFalse(bool condition, string memory err) internal {
+    if (condition) {
+      emit log_named_string("Error", err);
+      assertTrue(condition);
+    }
+  }
 }

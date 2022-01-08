@@ -9,6 +9,8 @@ import "../utils/DSTestExtended.sol";
 /* Import dep */
 import "contracts/Dependencies/ERC721Holder.sol";
 import "contracts/Dependencies/ERC1155Holder.sol";
+import "contracts/Dependencies/ERC20.sol";
+import "contracts/PaymentRouter/PaymentRouter.sol";
 
 contract NFTHolder is ERC721Holder, ERC1155Holder {}
 
@@ -16,7 +18,20 @@ contract Treasury is NFTHolder {}
 
 contract Dev is NFTHolder {}
 
-contract User is NFTHolder {}
+contract User is NFTHolder {
+  function approveERC20(ERC20 erc20, address to, uint256 amount) public {
+    erc20.approve(to, amount);
+  }
+
+  function pullTokens(PaymentRouter pr, address tokenAddr) public returns(bool){
+    bool success = pr.pullTokens(tokenAddr);
+    return success;
+  }
+
+  function togglePaymentRoute(PaymentRouter pr, bytes32 _routeID) public {
+    pr.togglePaymentRoute(_routeID);
+  }
+}
 
 //solhint-disable state-visibility
 contract UsersSetup is NFTHolder {

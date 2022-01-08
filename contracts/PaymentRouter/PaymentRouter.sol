@@ -126,7 +126,7 @@ contract PaymentRouter is Context {
       require(totalCommissions <= 10000, "Commissions cannot add up to more than 100%");
       require(_recipients[i] != address(0), "Cannot burn tokens with payment router");
       require(_commissions[i] != 0, "Cannot assign 0% commission");
-      require(_commissions[i] <= 10000, "Cannot assign more than 100% commission");
+      // require(_commissions[i] <= 10000, "Cannot assign more than 100% commission");
     }
     require(totalCommissions == 10000, "Commissions don't add up to 100%");
     _;
@@ -157,6 +157,30 @@ contract PaymentRouter is Context {
   }
 
   /**
+   * @notice Opens a new payment route
+   *
+   * @param _recipients Array of all recipient addresses for this payment route
+   * @param _commissions Array of all recipients' commissions--in percentages with two decimals
+   * @return routeID Hash of the created PaymentRoute
+   */
+  function openPaymentRoute(
+    address[] memory _recipients,
+    uint16[] memory _commissions,
+    uint16 _routeTax
+  ) external newRouteChecks(_recipients, _commissions) returns (bytes32 routeID) {
+    // Creates routeID from hashing contents of new PaymentRoute
+    routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
+
+    // Maps the routeID to the new PaymentRoute
+    paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, _routeTax, true);
+
+    // Maps the routeID to the address that created it, and pushes to creator's routes array
+    creatorRoutes[_msgSender()].push(routeID);
+
+    emit RouteCreated(msg.sender, routeID, _recipients, _commissions);
+  }
+
+  /**
    * @notice External function to transfer tokens from msg.sender to all recipients[].
    *
    * @dev The size of each payment is determined by commissions[i]/10000, which added up
@@ -179,7 +203,7 @@ contract PaymentRouter is Context {
     address _senderAddress,
     uint256 _amount
   ) public checkRouteTax(_routeID) returns (bool) {
-    require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
+    require(paymentRouteID[_routeID].isActive, "Route inactive");
 
     // Store PaymentRoute struct into local variable
     PaymentRoute memory route = paymentRouteID[_routeID];
@@ -202,7 +226,8 @@ contract PaymentRouter is Context {
         // Emit failure event alerting recipient they have tokens to collect
         emit TransferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
         // Store tokens in contract for holding until recipient collects them
-        tokenBalanceToCollect[_senderAddress][_tokenAddress] += payment;
+        // tokenBalanceToCollect[_senderAddress][_tokenAddress] += payment; CRITIAL BUG
+        tokenBalanceToCollect[route.recipients[i]][_tokenAddress] += payment;
         continue; // Continue to next recipient
       }
     }
@@ -278,30 +303,6 @@ contract PaymentRouter is Context {
     // Emit a TokensCollected event as a recipient's receipt
     emit TokensCollected(msg.sender, _tokenAddress, payment);
     return true;
-  }
-
-  /**
-   * @notice Opens a new payment route
-   *
-   * @param _recipients Array of all recipient addresses for this payment route
-   * @param _commissions Array of all recipients' commissions--in percentages with two decimals
-   * @return routeID Hash of the created PaymentRoute
-   */
-  function openPaymentRoute(
-    address[] memory _recipients,
-    uint16[] memory _commissions,
-    uint16 _routeTax
-  ) external newRouteChecks(_recipients, _commissions) returns (bytes32 routeID) {
-    // Creates routeID from hashing contents of new PaymentRoute
-    routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
-
-    // Maps the routeID to the new PaymentRoute
-    paymentRouteID[routeID] = PaymentRoute(msg.sender, _recipients, _commissions, _routeTax, true);
-
-    // Maps the routeID to the address that created it, and pushes to creator's routes array
-    creatorRoutes[_msgSender()].push(routeID);
-
-    emit RouteCreated(msg.sender, routeID, _recipients, _commissions);
   }
 
   event RouteToggled(bytes32 indexed routeID, bool isActive, uint256 timestamp);
