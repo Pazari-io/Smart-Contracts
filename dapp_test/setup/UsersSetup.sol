@@ -9,56 +9,11 @@ import "../utils/DSTestExtended.sol";
 /* Import dep */
 import "contracts/Dependencies/ERC721Holder.sol";
 import "contracts/Dependencies/ERC1155Holder.sol";
-import "contracts/Dependencies/ERC20.sol";
-import "contracts/PaymentRouter/PaymentRouter.sol";
 
 contract NFTHolder is ERC721Holder, ERC1155Holder {}
 
-contract Treasury is NFTHolder {}
-
-contract Dev is NFTHolder {}
-
-contract User is NFTHolder {
-  function approveERC20(ERC20 erc20, address to, uint256 amount) public {
-    erc20.approve(to, amount);
-  }
-
-  function pullTokens(PaymentRouter pr, address tokenAddr) public returns(bool){
-    bool success = pr.pullTokens(tokenAddr);
-    return success;
-  }
-
-  function togglePaymentRoute(PaymentRouter pr, bytes32 _routeID) public {
-    pr.togglePaymentRoute(_routeID);
-  }
-}
-
 //solhint-disable state-visibility
-contract UsersSetup is NFTHolder {
-  //Users
-  Dev[] devs;
-  User[] users;
-  address[] devsAddr;
-  address[] usersAddr;
-
-  //Treasury
-  Treasury treasury;
-
+contract User is NFTHolder {
   //Need this to receive ETH
   receive() external payable {}
-
-  function setUp(uint8 numDevs, uint16 numUsers) public virtual {
-    //Setup treasury
-    treasury = new Treasury();
-
-    //Setup accounts
-    for (uint256 i = 0; i < numDevs; i++) {
-      devs.push(new Dev());
-      devsAddr.push(address(devs[i]));
-    }
-    for (uint256 i = 0; i < numUsers; i++) {
-      users.push(new User());
-      usersAddr.push(address(users[i]));
-    }
-  }
 }

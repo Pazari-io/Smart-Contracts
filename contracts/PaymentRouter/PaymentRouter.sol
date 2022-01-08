@@ -158,10 +158,13 @@ contract PaymentRouter is Context {
     PaymentRoute memory route = paymentRouteID[_routeID];
 
     // If route tax is set to Custom:
-    if (route.taxType != TAXTYPE.MINTAX && route.taxType != TAXTYPE.MAXTAX) {
+    if (route.taxType == TAXTYPE.CUSTOM) {
       // If routeTax doesn't meet minTax, then it is set to minTax
       if (route.routeTax < minTax) {
         route.routeTax = minTax;
+      } else if (route.routeTax > maxTax) {
+        //Added this logic
+        route.routeTax = maxTax;
       }
     } else {
       route.routeTax = route.taxType == TAXTYPE.MINTAX ? minTax : maxTax;
@@ -418,16 +421,18 @@ contract PaymentRouter is Context {
 
     // Logic for fixing _routeTax to minTax or maxTax values
     // _routeTax <= minTax auto-sets to minTax
-    // _routeTax == 10001 sets to maxTax
+    // _routeTax >= 10000 sets to maxTax
     if (_newTax <= minTax) {
       _newTax = minTax;
       taxType = TAXTYPE.MINTAX;
     }
-    if (_newTax > 10000) {
+    if (_newTax >= 10000) {
+      //changed to >= 10000
       _newTax = maxTax;
       taxType = TAXTYPE.MAXTAX;
     }
     paymentRouteID[_routeID].routeTax = _newTax;
+    paymentRouteID[_routeID].taxType = taxType; //Added
 
     // Emit event so all recipients can be notified of the routeTax change
     emit RouteTaxChanged(_routeID, _newTax);
@@ -442,6 +447,7 @@ contract PaymentRouter is Context {
   function adjustTaxBounds(uint16 _minTax, uint16 _maxTax) external onlyDev {
     require(_minTax >= 0, "Minimum tax < 0.00%");
     require(_maxTax <= 10000, "Maximum tax > 100.00%");
+    require(_minTax < _maxTax, "Minimum tax > Maximum tax"); //Added
 
     minTax = _minTax;
     maxTax = _maxTax;
