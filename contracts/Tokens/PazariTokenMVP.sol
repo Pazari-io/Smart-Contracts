@@ -225,7 +225,7 @@ contract PazariTokenMVP is Pazari1155 {
     uint256[] memory _amounts,
     address[] memory _recipients
   ) external onlyOwners returns (bool) {
-    require(_amounts.length == _tokenIDs.length, "Amounts and tokenProps must be same length");
+    require(_amounts.length == _tokenIDs.length, "Amounts and tokenIds must be same length");
     uint256 i; // TokenID and amount counter
     uint256 j; // Recipients counter
     // Iterate through each tokenID:
