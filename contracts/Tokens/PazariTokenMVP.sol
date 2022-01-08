@@ -48,13 +48,13 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   mapping(address => mapping(uint256 => uint256)) public tokenOwnerIndex;
 
   // Public array of all TokenProps structs created
-  // Newest tokenID is tokenIDs.length
-  TokenProps[] public tokenIDs;
+  // Newest tokenID is tokenProps.length
+  TokenProps[] public tokenProps;
 
   /**
    * @dev Struct to track token properties.
    *
-   * note I decided to include tokenID here since tokenID - 1 is needed for tokenIDs[],
+   * note I decided to include tokenID here since tokenID - 1 is needed for tokenProps[],
    * which may get confusing. We can use the tokenID property to double-check that we
    * are accessing the correct token's properties. It also looks and feels more intuitive
    * as well for a struct that tells us everything we need to know about a tokenID.
@@ -89,7 +89,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * False = Limited Edition, cannot be minted -- supplyCap >= totalSupply
    */
   modifier isMintable(uint256 _tokenID) {
-    require(tokenIDs[_tokenID - 1].isMintable, "Minting disabled");
+    require(tokenProps[_tokenID - 1].isMintable, "Minting disabled");
     _;
   }
 
@@ -143,13 +143,14 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * @param _isMintable Can tokens be minted? DEFAULT: True
    * @param _amount Amount of tokens to create
    * @param _supplyCap Maximum supply cap. DEFAULT: 0 (infinite supply)
+   * @return tokenID
    */
   function createNewToken(
     string memory _newURI,
     uint256 _amount,
     uint256 _supplyCap,
     bool _isMintable
-  ) external onlyOwners {
+  ) external onlyOwners returns (uint256 tokenID) {
     // If _amount == 0, then supply is infinite
     if (_amount == 0) {
       _amount = type(uint256).max;
@@ -163,7 +164,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
       _supplyCap = type(uint256).max;
     }
 
-    _createToken(_newURI, _isMintable, _amount, _supplyCap);
+    tokenID = _createToken(_newURI, _isMintable, _amount, _supplyCap);
   }
 
   function _createToken(
@@ -171,24 +172,20 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     bool _isMintable,
     uint256 _amount,
     uint256 _supplyCap
-  ) internal {
+  ) internal returns (uint256) {
     address[] memory tokenHolders;
-    TokenProps memory newToken = TokenProps(
-      tokenIDs.length + 1,
-      _newURI,
-      _amount,
-      _supplyCap,
-      _isMintable,
-      tokenHolders
-    );
-    tokenIDs.push(newToken);
+    uint256 tokenID = tokenProps.length + 1;
+    TokenProps memory newToken = TokenProps(tokenID, _newURI, _amount, _supplyCap, _isMintable, tokenHolders);
+    tokenProps.push(newToken);
 
     require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
+
+    return tokenID;
   }
 
   /**
    * @dev Use this function for producing either ERC721-style collections of many unique tokens or for
-   * uploading a whole collection of works with varying token amounts.
+   * uploading a whole collection of works with varying token amounts
    *
    * See createNewToken() for description of parameters.
    */
@@ -230,7 +227,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     string memory,
     bytes memory
   ) external onlyOwners isMintable(_tokenID) returns (bool) {
-    TokenProps memory tokenProperties = tokenIDs[_tokenID - 1];
+    TokenProps memory tokenProperties = tokenProps[_tokenID - 1];
     require(tokenProperties.totalSupply > 0, "Token does not exist");
     if (tokenProperties.supplyCap != 0) {
       // Check that new amount does not exceed the supply cap
@@ -279,7 +276,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     uint256 _tokenToCheck,
     uint256 _amount
   ) external onlyOwners returns (bool) {
-    address[] memory tokenHolders = tokenIDs[_tokenToCheck - 1].tokenHolders;
+    address[] memory tokenHolders = tokenProps[_tokenToCheck - 1].tokenHolders;
     require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
 
     for (uint256 i = 0; i < tokenHolders.length; i++) {
@@ -317,7 +314,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * with OpenSea's standards.
    */
   function uri(uint256 _tokenID) public view virtual override returns (string memory) {
-    return tokenIDs[_tokenID - 1].uri;
+    return tokenProps[_tokenID - 1].uri;
   }
 
   /**
@@ -333,7 +330,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * @dev Internal function that updates URI;
    */
   function _setURI(string memory _newURI, uint256 _tokenID) internal virtual {
-    tokenIDs[_tokenID - 1].uri = _newURI;
+    tokenProps[_tokenID - 1].uri = _newURI;
   }
 
   /**
@@ -506,7 +503,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
     _burn(msg.sender, _tokenID, _amount);
     if (balanceOf(msg.sender, _tokenID) == 0) {
-      tokenIDs[_tokenID - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenID]] = address(0);
+      tokenProps[_tokenID - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenID]] = address(0);
     }
     return true;
   }
@@ -523,7 +520,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     _burnBatch(msg.sender, _tokenIDs, _amounts);
     for (uint256 i = 0; i < _tokenIDs.length; i++) {
       if (balanceOf(msg.sender, _tokenIDs[i]) == 0) {
-        tokenIDs[_tokenIDs[i] - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenIDs[i]]] = address(0);
+        tokenProps[_tokenIDs[i] - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenIDs[i]]] = address(0);
       }
     }
     return true;
@@ -682,7 +679,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     // If recipient does not own a token, then add their address to tokenHolders
     for (uint256 i = 0; i < ids.length; i++) {
       if (tempBools[i]) {
-        tokenIDs[ids[i] - 1].tokenHolders.push(to);
+        tokenProps[ids[i] - 1].tokenHolders.push(to);
       }
     }
   }
