@@ -4,17 +4,17 @@ pragma solidity ^0.8.0;
 //solhint-disable state-visibility
 
 /* Import lib */
-import "../utils/Hevm.sol";
-import "../utils/MockContract.sol";
-import "../utils/DSTestExtended.sol";
+// import "../utils/Hevm.sol";
+// import "../utils/MockContract.sol";
+// import "../utils/DSTestExtended.sol";
 
 /* Import setups */
-import {UsersSetup} from "./UsersSetup.sol";
+// import {UsersSetup} from "./UsersSetup.sol";
 
 /* Import contracts */
-import {Marketplace} from "contracts/Marketplace/Marketplace.sol";
-import {ERC1155PresetMinterPauser} from "contracts/Dependencies/ERC1155PresetMinterPauser.sol";
-import {ERC20PresetMinterPauser} from "contracts/Dependencies/ERC20PresetMinterPauser.sol";
+// import {Marketplace} from "contracts/Marketplace/Marketplace.sol";
+// import {ERC1155PresetMinterPauser} from "contracts/Dependencies/ERC1155PresetMinterPauser.sol";
+// import {ERC20PresetMinterPauser} from "contracts/Dependencies/ERC20PresetMinterPauser.sol";
 
 // contract MarketplaceSetup is DSTestExtended, UsersSetup {
 //   //Hevm setup
