@@ -1,5 +1,6 @@
 import {
   ERC20PresetMinterPauser__factory,
+  FactoryPazariTokenMVP__factory,
   Marketplace__factory,
   PaymentRouter__factory,
   PazariTokenMVP__factory,
@@ -32,11 +33,8 @@ const main = async () => {
     args: ["Magic Internet Money", "MIM"],
   });
 
-  //Deploy Pazari Token (ERC1155 like token)
-  const contractOwners = [seller.address, pr.address, mp.address];
-  const token = await deploy(PazariTokenMVP__factory, {
-    args: [contractOwners],
-  });
+  //Deploy factory contract
+  const factory = await deploy(FactoryPazariTokenMVP__factory);
 
   await verifyDeployedContracts();
 };

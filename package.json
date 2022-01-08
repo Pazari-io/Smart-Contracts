@@ -13,7 +13,7 @@
     "test": "yarn test:dapp && yarn test:hh",
     "test:dapp": "dapp test",
     "test:hh": "npx hardhat test",
-    "test:truffle": "npx truffle build && npx truffle test",
+    "test:truffle": "npx truffle compile && npx truffle test",
     "lint": "eslint \"**/*.{js,ts}\" && solhint src/**/*.sol",
     "lint:fix": "eslint --fix \"**/*.{js,ts}\" && solhint --fix src/**/*.sol",
     "lint:sol": "solhint -f table contracts/**/*.sol",
@@ -24,11 +24,12 @@
     "coverage": "HARDHAT_DEPLOY_FIXTURE=true hardhat coverage",
     "typechain": "TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
     "clean": "rm -rf abi artifacts cache types",
+    "lint-staged": "lint-staged",
     "check:push": "yarn format:fix && yarn lint:fix && yarn lint:sol"
   },
   "lint-staged": {
-    "src/**/*.{ts,js,sol}": [
-      "prettier --write"
+    "*.{ts,js,sol}": [
+      "npx prettier --write"
     ]
   },
   "author": "",

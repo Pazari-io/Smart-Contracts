@@ -71,6 +71,8 @@ interface IMarketplace {
    * @param _routeMutable Assigns mutability to the routeID, keep false for most items (MVP: false)
    * @return itemID ItemID of the market item
    *
+   * @dev Emits MarketItemCreated event
+   *
    * @dev Front-end must call IERC1155.setApprovalForAll(marketAddress, true) for any ERC1155 token
    * that is NOT a Pazari1155 contract. Pazari1155 will have auto-approval for Marketplace.
    */
@@ -94,7 +96,7 @@ interface IMarketplace {
    *
    * @dev _index = itemID - 1
    */
-  function marketItems(uint256 _index) external returns (MarketItem memory);
+  function marketItems(uint256 _index) external view returns (MarketItem memory);
 
   /**
    * @notice Purchases an _amount of market item itemID
@@ -102,6 +104,8 @@ interface IMarketplace {
    * @param _itemID Market ID of item being bought
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
+   *
+   * @dev Emits ItemSoldOut when last item is bought and MarketItemSold for every purchase
    *
    * @dev Providing _amount == 0 will purchase the item's full itemLimit.
    */
@@ -115,6 +119,8 @@ interface IMarketplace {
    *
    * @param _itemID MarketItem ID
    * @param _amount Amount of tokens being restocked
+   *
+   * @dev Emits ItemRestocked event
    */
   function restockItem(uint256 _itemID, uint256 _amount) external;
 
@@ -125,6 +131,8 @@ interface IMarketplace {
    *
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
+   *
+   * @dev Emits StockPulled event
    */
   function pullStock(uint256 _itemID, uint256 _amount) external;
 
@@ -141,6 +149,8 @@ interface IMarketplace {
    * @param _routeID Payment route ID, only mutable if routeMutable == true (MVP: 0)
    * @param _itemLimit Buyer's purchase limit for item (MVP: 1)
    * @return Sucess boolean
+   *
+   * @dev Emits MarketItemChanged event
    */
   function modifyMarketItem(
     uint256 _itemID,
@@ -155,14 +165,16 @@ interface IMarketplace {
    * @notice Toggles whether an item is for sale or not
    *
    * @dev Use this function to activate/deactivate items for sale on market. Only items that are
-   * forSale will be returned by getItemsForSale() and getItemIDsForSale().
+   * forSale will be returned by getInStockItems().
    *
    * @param _itemID Marketplace ID of item for sale
+   *
+   * @dev Emits ForSaleToggled event
    */
   function toggleForSale(uint256 _itemID) external;
 
   /**
-   * @dev Returns an array of all items for sale on marketplace
+   * @notice Returns an array of all items for sale on marketplace
    */
   function getItemsForSale() external view returns (MarketItem[] memory);
 
@@ -177,15 +189,13 @@ interface IMarketplace {
   function getMarketItems(uint256[] memory _itemIDs) external view returns (MarketItem[] memory marketItems_);
 
   /**
-   * @notice Checks if an address owns a tokenID from a token contract
+   * @notice Checks if an address owns any itemIDs
    *
-   * @param _owner The token owner being checked
-   * @param _tokenContract The contract address of the token being checked
-   * @param _tokenID The token ID being checked
+   * @param _owner The address being checked
+   * @param _itemIDs Array of item IDs being checked
+   *
+   * @dev This function can be used to check for tokens across multiple contracts, and is better than the
+   * ownsTokens() function in the PazariTokenMVP contract. This is the only function we will need to call.
    */
-  function ownsToken(
-    address _owner,
-    address _tokenContract,
-    uint256 _tokenID
-  ) external view returns (bool);
+  function ownsTokens(address _owner, uint256[] memory _itemIDs) external view returns (bool[] memory);
 }

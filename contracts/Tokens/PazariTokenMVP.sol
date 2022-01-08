@@ -11,8 +11,21 @@
  * However, they are not transferrable to anyone who isn't an
  * owner of the contract. These tokens are pseudo-NFTs.
  *
+ *  start at 1 instead of 0. TokenID 0 can be used for
+ * existence checking.
+ *
  * All tokenHolders are tracked inside of each tokenID's TokenProps,
  * which makes airdrops much easier to accommodate.
+ *
+ * For ownsToken() and airdropToken() I created three overloaded
+ * designs for these functions. We can only use one design of each
+ * function due to contract size limits in the factory.
+ * - I intend to move the airdropping functionality to a new
+ *   utility contract that can be cloned by sellers who wish
+ *   to use it. This contract is already on the edge of its
+ *   size limits, so we need to figure out which functions
+ *   can be offloaded to an external contract before we
+ *   deploy the official MVP.
  */
 
 // SPDX-License-Identifier: MIT
@@ -28,60 +41,21 @@ import "../Dependencies/ERC165.sol";
 import "../Dependencies/Ownable.sol";
 import "../Marketplace/Marketplace.sol";
 import "./IPazariTokenMVP.sol";
+import "./Pazari1155.sol";
 
-contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
+contract PazariTokenMVP is Pazari1155 {
   using Address for address;
 
-  // Mapping from token ID to account balances
-  mapping(uint256 => mapping(address => uint256)) private _balances;
+  // Fires when a new token is created through createNewToken()
+  event TokenCreated(string URI, uint256 indexed tokenID, uint256 amount);
 
-  // Mapping from account to operator approvals
-  mapping(address => mapping(address => bool)) private _operatorApprovals;
+  // Fires when more tokens are minted from a pre-existing tokenID
+  event TokensMinted(address indexed mintTo, uint256 indexed tokenID, uint256 amount);
 
-  // Restricts access to sensitive functions to only the owner(s) of this contract
-  // This is specified during deployment, and more owners can be added later
-  mapping(address => bool) private isOwner;
+  // Fires when a contract owner adds a new owner to the contract
+  event OwnerAdded(address indexed newOwner, address indexed tokenContract);
 
-  // Returns tokenOwner index value for an address and a tokenID
-  // token owner's address => tokenID => tokenOwner[] index value
-  // Used by burn() and burnBatch() to avoid looping over tokenOwner[] arrays
-  mapping(address => mapping(uint256 => uint256)) public tokenOwnerIndex;
-
-  // Public array of all TokenProps structs created
-  // Newest tokenID is tokenIDs.length
-  TokenProps[] public tokenIDs;
-
-  /**
-   * @dev Struct to track token properties.
-   *
-   * note I decided to include tokenID here since tokenID - 1 is needed for tokenIDs[],
-   * which may get confusing. We can use the tokenID property to double-check that we
-   * are accessing the correct token's properties. It also looks and feels more intuitive
-   * as well for a struct that tells us everything we need to know about a tokenID.
-   */
-  struct TokenProps {
-    uint256 tokenID; // ID of token
-    string uri; // IPFS URI where public metadata is located
-    uint256 totalSupply; // Circulating/minted supply;
-    uint256 supplyCap; // Max supply of tokens that can exist;
-    bool isMintable; // Token can be minted;
-    address[] tokenHolders; // All holders of this token, if fungible
-  }
-
-  /**
-   * @param _contractOwners Array of all operators that do not require approval to handle
-   * transferFrom() operations. Default is the Pazari Marketplace contract, but more operators
-   * can be passed in. Operators are mostly responsible for minting new tokens.
-   */
-  constructor(address[] memory _contractOwners) {
-    super;
-    for (uint256 i = 0; i < _contractOwners.length; i++) {
-      _operatorApprovals[_msgSender()][_contractOwners[i]] = true;
-      isOwner[_contractOwners[i]] = true;
-
-      emit ApprovalForAll(_msgSender(), _contractOwners[i], true);
-    }
-  }
+  constructor(address[] memory _contractOwners) Pazari1155(_contractOwners) {}
 
   /**
    * @dev Checks if _tokenID is mintable or not:
@@ -89,51 +63,36 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * False = Limited Edition, cannot be minted -- supplyCap >= totalSupply
    */
   modifier isMintable(uint256 _tokenID) {
-    require(tokenIDs[_tokenID - 1].isMintable, "Minting disabled");
+    require(tokenProps[_tokenID - 1].isMintable, "Minting disabled");
     _;
   }
 
   /**
-   * @dev Restricts access to the owner(s) of the contract
-   */
-  modifier onlyOwners() {
-    require(isOwner[msg.sender], "Only contract owners permitted");
-    _;
-  }
-
-  /**
-   * @dev Adds a new owner address, only owners can call
-   */
-  function addOwner(address _newOwner) external onlyOwners {
-    _operatorApprovals[msg.sender][_newOwner] = true;
-    isOwner[_newOwner] = true;
-
-    emit ApprovalForAll(msg.sender, _newOwner, true);
-  }
-
-  /**
-   * @dev Overloaded version of ownsToken(), checks multiple tokenIDs against a single address and
-   * returns an array of bools indicating ownership for each _tokenID[i].
+   * @notice Adds new owner addresses, only owners can call
    *
-   * @param _tokenIDs Array of tokenIDs to check ownership of
-   * @param _owner Wallet address being checked
+   * @dev Emits OwnerAdded event for each address added
    *
-   * This function is intended for use on sellers' websites in the future, when they can copy some
-   * boilerplate code from us to use for creating a "Connect Wallet" button that will check for
-   * token ownership across a range of _tokenIDs for whoever connects their wallet.
+   * @dev All owners can call transferFrom() without operator approval, and they can
+   * add new owners to the contract. This should ideally *never* be used for wallet
+   * addresses, and should be limited to Pazari smart contracts. The only exception
+   * is if a seller wants to share a token contract with a co-creator that they trust.
+   *
+   * @dev This function exposes an attack vector if the wrong address is provided.
    */
-
-  function ownsToken(uint256[] memory _tokenIDs, address _owner) public view returns (bool[] memory) {
-    bool[] memory hasToken = new bool[](_tokenIDs.length);
-    for (uint256 i = 0; i < _tokenIDs.length; i++) {
-      uint256 tokenID = _tokenIDs[i];
-      if (balanceOf(_owner, tokenID) != 0) {
-        hasToken[i] = true;
-      } else {
-        hasToken[i] = false;
-      }
+  function addOwners(address[] memory _newOwners) external onlyOwners {
+    for (uint256 i = 0; i < _newOwners.length; i++) {
+      address newOwner = _newOwners[i];
+      _operatorApprovals[msg.sender][newOwner] = true;
+      isOwner[newOwner] = true;
+      emit OwnerAdded(newOwner, address(this));
     }
-    return hasToken;
+  }
+
+  /**
+   * @dev Returns an array of all holders of a _tokenID
+   */
+  function tokenHolders(uint256 _tokenID) external view returns (address[] memory) {
+    return tokenProps[_tokenID - 1].tokenHolders;
   }
 
   /**
@@ -149,7 +108,8 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     uint256 _amount,
     uint256 _supplyCap,
     bool _isMintable
-  ) external onlyOwners {
+  ) external onlyOwners returns (uint256) {
+    uint256 tokenID;
     // If _amount == 0, then supply is infinite
     if (_amount == 0) {
       _amount = type(uint256).max;
@@ -163,7 +123,8 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
       _supplyCap = type(uint256).max;
     }
 
-    _createToken(_newURI, _isMintable, _amount, _supplyCap);
+    tokenID = _createToken(_newURI, _isMintable, _amount, _supplyCap);
+    return tokenID;
   }
 
   function _createToken(
@@ -171,19 +132,22 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     bool _isMintable,
     uint256 _amount,
     uint256 _supplyCap
-  ) internal {
-    address[] memory tokenHolders;
+  ) internal returns (uint256 tokenID) {
+    address[] memory emptyTokenHoldersArray;
     TokenProps memory newToken = TokenProps(
-      tokenIDs.length + 1,
+      tokenProps.length + 1,
       _newURI,
       _amount,
       _supplyCap,
       _isMintable,
-      tokenHolders
+      emptyTokenHoldersArray
     );
-    tokenIDs.push(newToken);
+    tokenProps.push(newToken);
+    tokenID = newToken.tokenID;
 
     require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
+
+    emit TokenCreated(_newURI, newToken.tokenID, _amount);
   }
 
   /**
@@ -219,9 +183,16 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   }
 
   /**
-   * @dev Mints more copies of a created token.
+   * @notice Mints more units of a created token
    *
-   * If seller provided isMintable == false, then this function will revert
+   * @dev Only available for tokens with isMintable == true
+   *
+   * @param _mintTo Address tokens were minted to (MVP: msg.sender)
+   * @param _tokenID Token ID being minted
+   * @param _amount Amount of tokenID to be minted
+   * @return Bool Success bool
+   *
+   * @dev Emits TokensMinted event
    */
   function mint(
     address _mintTo,
@@ -230,21 +201,23 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     string memory,
     bytes memory
   ) external onlyOwners isMintable(_tokenID) returns (bool) {
-    TokenProps memory tokenProperties = tokenIDs[_tokenID - 1];
+    TokenProps memory tokenProperties = tokenProps[_tokenID - 1];
     require(tokenProperties.totalSupply > 0, "Token does not exist");
     if (tokenProperties.supplyCap != 0) {
       // Check that new amount does not exceed the supply cap
       require(tokenProperties.totalSupply + _amount <= tokenProperties.supplyCap, "Amount exceeds cap");
     }
     _mint(_mintTo, _tokenID, _amount, "");
+    emit TokensMinted(_mintTo, _tokenID, _amount);
     return true;
   }
 
   /**
-   * @dev Overloaded version of airdropTokens() that can airdrop multiple tokenIDs to each _recipients[j]
-   * @param _tokenIDs Token being airdropped
-   * @param _amounts Amount of tokens
-   * @param _recipients Array of all airdrop recipients
+   * @dev Performs a multi-token airdrop of each _amounts[i] for each _[i] to each _recipients[j]
+   *
+   * @param _tokenIDs Tokens being airdropped
+   * @param _amounts Amount of each token being sent to each recipient
+   * @param _recipients All airdrop recipients
    * @return Success bool
    */
   function airdropTokens(
@@ -252,7 +225,7 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
     uint256[] memory _amounts,
     address[] memory _recipients
   ) external onlyOwners returns (bool) {
-    require(_amounts.length == _tokenIDs.length, "Amounts and tokenIDs must be same length");
+    require(_amounts.length == _tokenIDs.length, "Amounts and tokenIds must be same length");
     uint256 i; // TokenID and amount counter
     uint256 j; // Recipients counter
     // Iterate through each tokenID:
@@ -269,46 +242,18 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
   }
 
   /**
-   * @dev This overloaded version will send _tokenToDrop to every valid address in the tokenHolders
-   * array found at tokenIDs[_tokenToCheck]. This is much simpler to call, but cannot be given an
-   * arbitrary array of recipients for the airdrop.
+   * @dev Overridden ERC1155 function, requires that the caller of the function
+   * is an owner of the contract.
    */
-
-  function airdropTokens(
-    uint256 _tokenToDrop,
-    uint256 _tokenToCheck,
-    uint256 _amount
-  ) external onlyOwners returns (bool) {
-    address[] memory tokenHolders = tokenIDs[_tokenToCheck - 1].tokenHolders;
-    require(balanceOf(_msgSender(), _tokenToDrop) >= tokenHolders.length * _amount, "Insufficient tokens");
-
-    for (uint256 i = 0; i < tokenHolders.length; i++) {
-      if (tokenHolders[i] == address(0)) continue;
-      else _safeTransferFrom(_msgSender(), tokenHolders[i], _tokenToDrop, _amount, "");
-    }
-    return true;
-  }
-
-  /**
-   * -----------------------------------
-   *     ERC1155 STANDARD FUNCTIONS
-   * -----------------------------------
-   */
-
-  /**
-   * @dev See {IERC165-supportsInterface}.
-   */
-  function supportsInterface(bytes4 interfaceId)
-    public
-    view
-    virtual
-    override(ERC165, IERC165)
-    returns (bool)
-  {
-    return
-      interfaceId == type(IERC1155).interfaceId ||
-      interfaceId == type(IERC1155MetadataURI).interfaceId ||
-      super.supportsInterface(interfaceId);
+  function safeTransferFrom(
+    address from,
+    address to,
+    uint256 id,
+    uint256 amount,
+    bytes memory data
+  ) external virtual override {
+    require(isOwner[from], "PazariToken: Caller is not an owner");
+    _safeTransferFrom(from, to, id, amount, data);
   }
 
   /**
@@ -317,424 +262,6 @@ contract PazariTokenMVP is Context, ERC165, IERC1155MetadataURI {
    * with OpenSea's standards.
    */
   function uri(uint256 _tokenID) public view virtual override returns (string memory) {
-    return tokenIDs[_tokenID - 1].uri;
-  }
-
-  /**
-   * @dev External function that updates URI
-   *
-   * Only the contract owner(s) may update content URI
-   */
-  function setURI(string memory _newURI, uint256 _tokenID) external onlyOwners {
-    _setURI(_newURI, _tokenID);
-  }
-
-  /**
-   * @dev Internal function that updates URI;
-   */
-  function _setURI(string memory _newURI, uint256 _tokenID) internal virtual {
-    tokenIDs[_tokenID - 1].uri = _newURI;
-  }
-
-  /**
-   * @dev See {IERC1155-balanceOf}.
-   *
-   * Requirements:
-   *
-   * - `account` cannot be the zero address.
-   */
-  function balanceOf(address account, uint256 id) public view virtual override returns (uint256) {
-    require(account != address(0), "ERC1155: balance query for the zero address");
-    return _balances[id][account];
-  }
-
-  /**
-   * @dev See {IERC1155-balanceOfBatch}.
-   *
-   * Requirements:
-   *
-   * - `accounts` and `ids` must have the same length.
-   */
-  function balanceOfBatch(address[] memory accounts, uint256[] memory ids)
-    public
-    view
-    virtual
-    override
-    returns (uint256[] memory)
-  {
-    require(accounts.length == ids.length, "ERC1155: accounts and ids length mismatch");
-
-    uint256[] memory batchBalances = new uint256[](accounts.length);
-
-    for (uint256 i = 0; i < accounts.length; ++i) {
-      batchBalances[i] = balanceOf(accounts[i], ids[i]);
-    }
-
-    return batchBalances;
-  }
-
-  /**
-   * @dev See {IERC1155-setApprovalForAll}.
-   */
-  function setApprovalForAll(address operator, bool approved) public virtual override {
-    require(_msgSender() != operator, "ERC1155: setting approval status for self");
-
-    _operatorApprovals[_msgSender()][operator] = approved;
-    emit ApprovalForAll(_msgSender(), operator, approved);
-  }
-
-  /**
-   * @dev See {IERC1155-isApprovedForAll}.
-   */
-  function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
-    return _operatorApprovals[account][operator];
-  }
-
-  /**
-   * @dev See {IERC1155-safeTransferFrom}.
-   */
-  function safeTransferFrom(
-    address from,
-    address to,
-    uint256 id,
-    uint256 amount,
-    bytes memory data
-  ) public virtual override {
-    require(isOwner[from], "PazariToken: Caller is not an owner");
-    _safeTransferFrom(from, to, id, amount, data);
-  }
-
-  /**
-   * @dev See {IERC1155-safeBatchTransferFrom}.
-   */
-  function safeBatchTransferFrom(
-    address from,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) public virtual override {
-    require(
-      from == _msgSender() || isApprovedForAll(from, _msgSender()),
-      "ERC1155: transfer caller is not creator nor approved"
-    );
-    _safeBatchTransferFrom(from, to, ids, amounts, data);
-  }
-
-  /**
-   * @dev Transfers `amount` tokens of token type `id` from `from` to `to`.
-   *
-   * Emits a {TransferSingle} event.
-   *
-   * Requirements:
-   *
-   * - `to` cannot be the zero address.
-   * - `from` must have a balance of tokens of type `id` of at least `amount`.
-   * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
-   * acceptance magic value.
-   */
-  function _safeTransferFrom(
-    address from,
-    address to,
-    uint256 id,
-    uint256 amount,
-    bytes memory data
-  ) internal virtual {
-    require(to != address(0), "ERC1155: transfer to the zero address");
-
-    address operator = _msgSender();
-
-    _beforeTokenTransfer(operator, from, to, _asSingletonArray(id), _asSingletonArray(amount), data);
-
-    uint256 fromBalance = _balances[id][from];
-    require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
-    _balances[id][from] = fromBalance - amount;
-    _balances[id][to] += amount;
-
-    emit TransferSingle(operator, from, to, id, amount);
-
-    _doSafeTransferAcceptanceCheck(operator, from, to, id, amount, data);
-  }
-
-  /**
-   * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_safeTransferFrom}.
-   *
-   * Emits a {TransferBatch} event.
-   *
-   * Requirements:
-   *
-   * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
-   * acceptance magic value.
-   */
-  function _safeBatchTransferFrom(
-    address from,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) internal virtual {
-    require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
-    require(to != address(0), "ERC1155: transfer to the zero address");
-
-    address operator = _msgSender();
-
-    _beforeTokenTransfer(operator, from, to, ids, amounts, data);
-
-    for (uint256 i = 0; i < ids.length; ++i) {
-      uint256 id = ids[i];
-      uint256 amount = amounts[i];
-
-      uint256 fromBalance = _balances[id][from];
-      require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
-      _balances[id][from] = fromBalance - amount;
-      _balances[id][to] += amount;
-    }
-
-    emit TransferBatch(operator, from, to, ids, amounts);
-
-    _doSafeBatchTransferAcceptanceCheck(operator, from, to, ids, amounts, data);
-  }
-
-  /**
-   * @dev Burns copies of a token from a token owner's address.
-   *
-   * This can be called by anyone, and if they burn all of their tokens then
-   * their address in tokenOwners[tokenID] will be set to address(0). However,
-   * their tokenOwnerIndex[] value will not be deleted, as it will be used to
-   * put them back on the list of tokenOwners if they receive another token.
-   */
-  function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
-    _burn(msg.sender, _tokenID, _amount);
-    if (balanceOf(msg.sender, _tokenID) == 0) {
-      tokenIDs[_tokenID - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenID]] = address(0);
-    }
-    return true;
-  }
-
-  /**
-   * @dev Burns a batch of tokens from the caller's address.
-   *
-   * This can be called by anyone, and if they burn all of their tokens then
-   * their address in tokenOwners[tokenID] will be set to address(0). However,
-   * their tokenOwnerIndex[] value will not be deleted, as it will be used to
-   * put them back on the list of tokenOwners if they receive another token.
-   */
-  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool) {
-    _burnBatch(msg.sender, _tokenIDs, _amounts);
-    for (uint256 i = 0; i < _tokenIDs.length; i++) {
-      if (balanceOf(msg.sender, _tokenIDs[i]) == 0) {
-        tokenIDs[_tokenIDs[i] - 1].tokenHolders[tokenOwnerIndex[msg.sender][_tokenIDs[i]]] = address(0);
-      }
-    }
-    return true;
-  }
-
-  /**
-   * @dev Creates `amount` tokens of token type `id`, and assigns them to `account`.
-   *
-   * Emits a {TransferSingle} event.
-   *
-   * Requirements:
-   *
-   * - `account` cannot be the zero address.
-   * - If `account` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
-   * acceptance magic value.
-   */
-  function _mint(
-    address account,
-    uint256 id,
-    uint256 amount,
-    bytes memory data
-  ) internal virtual returns (bool) {
-    require(account != address(0), "ERC1155: mint to the zero address");
-
-    address operator = _msgSender();
-
-    //_beforeTokenTransfer(operator, address(0), account, _asSingletonArray(id), _asSingletonArray(amount), data);
-
-    _balances[id][account] += amount;
-    emit TransferSingle(operator, address(0), account, id, amount);
-
-    _doSafeTransferAcceptanceCheck(operator, address(0), account, id, amount, data);
-    return true;
-  }
-
-  /**
-   * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_mint}.
-   *
-   * Requirements:
-   *
-   * - `ids` and `amounts` must have the same length.
-   * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155BatchReceived} and return the
-   * acceptance magic value.
-   */
-  function _mintBatch(
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) internal virtual returns (bool) {
-    require(to != address(0), "ERC1155: mint to the zero address");
-    require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
-
-    address operator = _msgSender();
-
-    _beforeTokenTransfer(operator, address(0), to, ids, amounts, data);
-
-    for (uint256 i = 0; i < ids.length; i++) {
-      _balances[ids[i]][to] += amounts[i];
-    }
-
-    emit TransferBatch(operator, address(0), to, ids, amounts);
-
-    _doSafeBatchTransferAcceptanceCheck(operator, address(0), to, ids, amounts, data);
-    return true;
-  }
-
-  /**
-   * @dev Destroys `amount` tokens of token type `id` from `account`
-   *
-   * Requirements:
-   *
-   * - `account` cannot be the zero address.
-   * - `account` must have at least `amount` tokens of token type `id`.
-   */
-  function _burn(
-    address account,
-    uint256 id,
-    uint256 amount
-  ) internal virtual returns (bool) {
-    require(account != address(0), "ERC1155: burn from the zero address");
-
-    address operator = _msgSender();
-
-    _beforeTokenTransfer(operator, account, address(0), _asSingletonArray(id), _asSingletonArray(amount), "");
-
-    uint256 accountBalance = _balances[id][account];
-    require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
-    _balances[id][account] = accountBalance - amount;
-
-    emit TransferSingle(operator, account, address(0), id, amount);
-    return true;
-  }
-
-  /**
-   * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] version of {_burn}.
-   *
-   * Requirements:
-   *
-   * - `ids` and `amounts` must have the same length.
-   */
-  function _burnBatch(
-    address account,
-    uint256[] memory ids,
-    uint256[] memory amounts
-  ) internal virtual returns (bool) {
-    require(account != address(0), "ERC1155: burn from the zero address");
-    require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
-
-    address operator = _msgSender();
-
-    _beforeTokenTransfer(operator, account, address(0), ids, amounts, "");
-
-    for (uint256 i = 0; i < ids.length; i++) {
-      uint256 id = ids[i];
-      uint256 amount = amounts[i];
-
-      uint256 accountBalance = _balances[id][account];
-      require(accountBalance >= amount, "ERC1155: burn amount exceeds balance");
-      _balances[id][account] = accountBalance - amount;
-    }
-
-    emit TransferBatch(operator, account, address(0), ids, amounts);
-    return true;
-  }
-
-  /**
-   * @dev Hook that is called before any token transfer. This includes minting
-   * and burning, as well as batched variants.
-   *
-   * The same hook is called on both single and batched variants. For single
-   * transfers, the length of the `id` and `amount` arrays will be 1.
-   *
-   * Calling conditions (for each `id` and `amount` pair):
-   *
-   * - When `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-   * of token type `id` will be  transferred to `to`.
-   * - When `from` is zero, `amount` tokens of token type `id` will be minted
-   * for `to`.
-   * - when `to` is zero, `amount` of ``from``'s tokens of token type `id`
-   * will be burned.
-   * - `from` and `to` are never both zero.
-   * - `ids` and `amounts` have the same, non-zero length.
-   *
-   * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-   */
-  function _beforeTokenTransfer(
-    address,
-    address,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory,
-    bytes memory
-  ) internal virtual {
-    bool[] memory tempBools = ownsToken(ids, to);
-    // If recipient does not own a token, then add their address to tokenHolders
-    for (uint256 i = 0; i < ids.length; i++) {
-      if (tempBools[i]) {
-        tokenIDs[ids[i] - 1].tokenHolders.push(to);
-      }
-    }
-  }
-
-  function _doSafeTransferAcceptanceCheck(
-    address operator,
-    address from,
-    address to,
-    uint256 id,
-    uint256 amount,
-    bytes memory data
-  ) private {
-    if (to.isContract()) {
-      try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response) {
-        if (response != IERC1155Receiver(to).onERC1155Received.selector) {
-          revert("ERC1155: ERC1155Receiver rejected tokens");
-        }
-      } catch Error(string memory reason) {
-        revert(reason);
-      } catch {
-        revert("ERC1155: transfer to non ERC1155Receiver implementer");
-      }
-    }
-  }
-
-  function _doSafeBatchTransferAcceptanceCheck(
-    address operator,
-    address from,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) private {
-    if (to.isContract()) {
-      try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, amounts, data) returns (
-        bytes4 response
-      ) {
-        if (response != IERC1155Receiver(to).onERC1155BatchReceived.selector) {
-          revert("ERC1155: ERC1155Receiver rejected tokens");
-        }
-      } catch Error(string memory reason) {
-        revert(reason);
-      } catch {
-        revert("ERC1155: transfer to non ERC1155Receiver implementer");
-      }
-    }
-  }
-
-  function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
-    uint256[] memory array = new uint256[](1);
-    array[0] = element;
-
-    return array;
+    return tokenProps[_tokenID - 1].uri;
   }
 }
