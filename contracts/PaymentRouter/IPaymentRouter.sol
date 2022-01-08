@@ -48,6 +48,7 @@ interface IPaymentRouter {
     returns (
       address,
       uint16,
+      TAXTYPE,
       bool
     );
 

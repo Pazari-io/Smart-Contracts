@@ -1,20 +1,3 @@
-// WORKING VERSION
-/**
- * @dev This version uses an enum to auto-adjust route taxes that want to be
- * always minTax or always maxTax, which is convenient for sellers who want
- * any perks that come with the maxTax or who always want the minTax. That
- * way, if we lower minTax for a promotional period then all routes will
- * have that tax reduced, and when it is raised again then all routes will
- * have the tax raised as well. This was implemented in anticipation that we
- * may raise or lower platform taxes, and when we do it'll cause a ton of
- * revert errors to throw, or it'll cause any sellers running at maxTax to
- * lose their benefits.
- *
- * @dev BIG DOWNSIDE: There is now an enum that is returned from paymentRouteID.
- * However, you don't need the new interface. The old interface will work fine,
- * you just won't be able to see if the route tax is set to Minimum, Maximum,
- * or Custom.
- */
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -143,7 +126,7 @@ contract PaymentRouter is Context {
    * - Commissions are greater than 0% but less than 100%
    * - All commissions add up to exactly 100%
    */
-  modifier newRouteChecks(address[] memory _recipients, uint16[] memory _commissions) {
+  modifier newRouteChecks(address[] calldata _recipients, uint16[] calldata _commissions) {
     // Check for front-end errors
     require(_recipients.length == _commissions.length, "Array lengths must match");
     require(_recipients.length <= 256, "Max recipients exceeded");
@@ -175,17 +158,14 @@ contract PaymentRouter is Context {
     PaymentRoute memory route = paymentRouteID[_routeID];
 
     // If route tax is set to Custom:
-    if (route.taxType != TAXTYPE.MINTAX || route.taxType != TAXTYPE.MAXTAX) {
+    if (route.taxType != TAXTYPE.MINTAX && route.taxType != TAXTYPE.MAXTAX) {
       // If routeTax doesn't meet minTax, then it is set to minTax
       if (route.routeTax < minTax) {
         route.routeTax = minTax;
       }
-      _;
+    } else {
+      route.routeTax = route.taxType == TAXTYPE.MINTAX ? minTax : maxTax;
     }
-
-    route.taxType == TAXTYPE.MINTAX
-      ? paymentRouteID[_routeID].routeTax = minTax
-      : paymentRouteID[_routeID].routeTax = maxTax;
     _;
   }
 
@@ -234,7 +214,7 @@ contract PaymentRouter is Context {
         // Emit failure event alerting recipient they have tokens to collect
         emit TransferFailed(_msgSender(), _routeID, payment, block.timestamp, route.recipients[i]);
         // Store tokens in contract for holding until recipient collects them
-        tokenBalanceToCollect[_senderAddress][_tokenAddress] += payment;
+        tokenBalanceToCollect[route.recipients[i]][_tokenAddress] += payment;
         continue; // Continue to next recipient
       }
     }
@@ -336,10 +316,12 @@ contract PaymentRouter is Context {
    * @dev Emits RouteCreated event
    */
   function openPaymentRoute(
-    address[] memory _recipients,
-    uint16[] memory _commissions,
+    address[] calldata _recipients,
+    uint16[] calldata _commissions,
     uint16 _routeTax
   ) external newRouteChecks(_recipients, _commissions) returns (bytes32 routeID) {
+    require(_routeTax <= 10000, "Tax cannot be larger than 10000");
+
     // Creates routeID from hashing contents of new PaymentRoute
     routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
 
@@ -392,8 +374,8 @@ contract PaymentRouter is Context {
    */
   function getPaymentRouteID(
     address _routeCreator,
-    address[] memory _recipients,
-    uint16[] memory _commissions
+    address[] calldata _recipients,
+    uint16[] calldata _commissions
   ) public pure returns (bytes32 routeID) {
     routeID = keccak256(abi.encodePacked(_routeCreator, _recipients, _commissions));
   }

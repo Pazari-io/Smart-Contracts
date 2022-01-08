@@ -1,42 +1,3 @@
-/** WORKING VERSION
- * MARKETPLACE EXPERIMENTAL V0.1.3
- *
- * PHOENIX: I like these changes, I'm gonna merge them. I took everything from Experimental and
- * got it working, added missing events, improved the itemID system, and then fixed a revert
- * bug that I caused. All in all, I think it's cleaner.
- *
- * Differences between Experimental and Experimental2: PLEASE ADD ANYTHING I MISSED
- * - Removed itemIDs as a Counters.Counter variable, itemIDs are assigned by marketItems.length now
- *   - itemIDs are actually (marketItems.length + 1), that way we can use itemID 0 for existence checks
- *   - This means we have to use marketItems[itemID - 1] when accessing MarketItems[]
- * - Added event forSaleToggled(), which is emitted by toggleForSale()
- * - Added event stockPulled(), which is emitted by pullStock()
- * - Fixed bug in createMarketItem() and getItemsForSale() that was throwing revert error
- *   - The problem was marketItems[itemID], which because marketItems was converted to an array we now have to
- *     use marketItems[itemID - 1] to get a MarketItem from marketItems[]
- *   - I may have accidentally caused this bug, so oh well
- * - Changed createMarketItem() and modifyMarketItem() so that if _amount == 0 then the full token balance
- *   will be moved over to Marketplace, which enables front-end to use 0 as an alias for "all stock".
- * - Added MVP default values to comments before external functions
- *
- * Comments: PHOENIX
- * - I commented out _createMarketItem() in constructor function and added + 1 to marketItems.length
- *   inside _createMarketItem(). This avoids itemID 0 while also keeping marketItems.length accurate.
- *   The tradeoff is we have to use marketItems[itemID - 1].
- *
- * - I realized that there is a huge advantage to leaving PaymentRouter (PR) external to Marketplace (MP).
- *   It allows us to deploy expansions for MP without losing any PaymentRoute data, which allows us to
- *   deploy new Pazari contracts that expand functionality in the future without requiring anyone to
- *   set up new PaymentRoutes to use the expanded functionality. However, we need to decide if PR should
- *   have its external functions permissioned or permissionless. Should only MP contracts be allowed to
- *   use the PR? Or can anyone? I am afraid leaving PaymentRouter publicly accessible could somehow be
- *   used to attack us. What happens when a hacker sends stolen crypto down the PaymentRouter and we
- *   receive a 3%+ cut of it? I think we should make PaymentRouter permissioned access only, and include
- *   a function/mapping for adding/checking new expansions.
- *
- *
- */
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -105,10 +66,10 @@ contract Marketplace is ERC1155Holder, Context {
   event ItemSoldOut(uint256 indexed itemID);
 
   // Fires when forSale is toggled on or off for an itemID
-  event forSaleToggled(uint256 itemID, bool forSale);
+  event ForSaleToggled(uint256 itemID, bool forSale);
 
   // Fires when a creator pulls a MarketItem's stock from the Marketplace
-  event stockPulled(uint256 itemID, uint256 amount);
+  event StockPulled(uint256 itemID, uint256 amount);
 
   // Fires when market item details are modified
   event MarketItemChanged(
@@ -167,10 +128,9 @@ contract Marketplace is ERC1155Holder, Context {
     bool _routeMutable
   ) external returns (uint256 itemID) {
     /* ========== CHECKS ========== */
-
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_paymentContract != address(0), "Invalid payment token contract address");
-    (, , bool isActive) = paymentRouter.paymentRouteID(_routeID);
+    (, , , bool isActive) = paymentRouter.paymentRouteID(_routeID);
     require(isActive, "Payment route inactive");
 
     // If _amount == 0, then move entire token balance to Marketplace
@@ -393,7 +353,7 @@ contract Marketplace is ERC1155Holder, Context {
     /* ========== INTERACTIONS ========== */
     IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
-    emit stockPulled(_itemID, _amount);
+    emit StockPulled(_itemID, _amount);
 
     // Assert internal balances updated correctly, item.amount was initial amount
     assert(marketItems[_itemID - 1].amount < item.amount);
@@ -475,7 +435,7 @@ contract Marketplace is ERC1155Holder, Context {
     }
 
     // Event added
-    emit forSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
+    emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
   }
 
   /**
@@ -527,7 +487,7 @@ contract Marketplace is ERC1155Holder, Context {
 
     for (i = 0; j < unsoldItemCount || i < itemCount; i++) {
       if (marketItems[i].forSale) {
-        itemIDs[j] = i + 1; // Assign unsoldItem to items[j]
+        itemIDs[j] = marketItems[i].itemID; // Assign unsoldItem to items[j]
         j++; // Increment j
       }
     }

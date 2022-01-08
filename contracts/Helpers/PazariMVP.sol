@@ -13,14 +13,10 @@ import "../Dependencies/ERC1155Holder.sol";
 
 contract PazariMVP is ERC1155Holder {
   IERC20 public immutable stablecoin;
-  address public immutable stablecoinAddress;
-  IPaymentRouter public immutable iPaymentRouter;
-  address public immutable paymentRouterAddress;
-  IMarketplace public immutable iMarketplace;
-  address public immutable marketAddress;
-  FactoryPazariTokenMVP public immutable iFactoryPazariTokenMVP;
-  address public immutable factoryAddress;
-  IPazariTokenMVP private iPazariTokenMVP;
+  IPaymentRouter public immutable paymentRouter;
+  IMarketplace public immutable marketplace;
+  FactoryPazariTokenMVP public immutable factoryPazariTokenMVP;
+  IPazariTokenMVP private pazariTokenMVP;
 
   address[] private contractOwners; // All "owners" who can access restricted PazariToken functions
   address[] public deployedContracts; // Array of all token contract addresses deployed by this contract
@@ -45,17 +41,11 @@ contract PazariMVP is ERC1155Holder {
     address _stablecoin
   ) {
     super;
-    // Initialize all constants
-    marketAddress = _market;
-    paymentRouterAddress = _paymentRouter;
-    stablecoinAddress = _stablecoin;
-    factoryAddress = _factory;
 
-    // Instantiate all contracts
-    iMarketplace = IMarketplace(_market);
-    iPaymentRouter = IPaymentRouter(_paymentRouter);
+    marketplace = IMarketplace(_market);
+    paymentRouter = IPaymentRouter(_paymentRouter);
     stablecoin = IERC20(_stablecoin);
-    iFactoryPazariTokenMVP = FactoryPazariTokenMVP(_factory);
+    factoryPazariTokenMVP = FactoryPazariTokenMVP(_factory);
   }
 
   // Fires when a new user joins and lists an item
@@ -95,11 +85,11 @@ contract PazariMVP is ERC1155Holder {
     _addr[0] = msg.sender;
 
     //SET UP NEW PAYMENT ROUTE, STORE RETURNED ROUTE ID
-    bytes32 routeID = iPaymentRouter.openPaymentRoute(_addr, _uint, 0);
+    bytes32 routeID = paymentRouter.openPaymentRoute(_addr, _uint, 0);
 
     //CLONE NEW CONTRACT, STORE RETURNED TOKEN CONTRACT ADDRESS
-    contractOwners = [msg.sender, address(this), paymentRouterAddress, marketAddress];
-    address tokenContractAddress = iFactoryPazariTokenMVP.newPazariTokenMVP(contractOwners);
+    contractOwners = [msg.sender, address(this), address(paymentRouter), address(marketplace)];
+    address tokenContractAddress = factoryPazariTokenMVP.newPazariTokenMVP(contractOwners);
     // Push tokenContractAddress to array of all deployed contracts
     deployedContracts.push(tokenContractAddress);
 
@@ -107,13 +97,13 @@ contract PazariMVP is ERC1155Holder {
     uint256 tokenID = IPazariTokenMVP(tokenContractAddress).createNewToken(_URI, _amount, 0, true);
 
     //LIST TOKEN ON MARKETPLACE
-    uint256 itemID = iMarketplace.createMarketItem(
+    uint256 itemID = marketplace.createMarketItem(
       tokenContractAddress,
       msg.sender,
       tokenID,
       _amount,
       _price,
-      stablecoinAddress,
+      address(stablecoin),
       true,
       true,
       routeID,
@@ -154,13 +144,13 @@ contract PazariMVP is ERC1155Holder {
     tokenID = IPazariTokenMVP(tokenContract).createNewToken(_URI, _amount, 0, true);
 
     //LIST TOKEN ON MARKETPLACE
-    itemID = iMarketplace.createMarketItem(
+    itemID = marketplace.createMarketItem(
       tokenContract,
       msg.sender,
       tokenID,
       _amount,
       _price,
-      stablecoinAddress,
+      address(stablecoin),
       true,
       true,
       userProfile[msg.sender].routeID,
@@ -181,7 +171,7 @@ contract PazariMVP is ERC1155Holder {
     singletonArray[0] = _itemID;
 
     // Call getMarketItems(singletonArray), store returned MarketItem[] as marketItems
-    IMarketplace.MarketItem[] memory marketItems = iMarketplace.getMarketItems(singletonArray);
+    IMarketplace.MarketItem[] memory marketItems = marketplace.getMarketItems(singletonArray);
 
     // Return first element marketItems--this is the MarketItem we are looking for
     return marketItems[0];
@@ -201,24 +191,24 @@ contract PazariMVP is ERC1155Holder {
     uint256 tokenID = getMarketItem(_itemID).tokenID;
 
     // Make sure caller owns the tokenContract of the itemID they are restocking
-    require(getMarketItem(_itemID).tokenContract == userProfile[msg.sender].tokenContract, 
+    require(getMarketItem(_itemID).tokenContract == userProfile[msg.sender].tokenContract,
         "You don't own that item");
     require(tokenContract != address(0), "User does not have token contract!");
     require(_amount > 0, "Amount must be greater than 0");
     // Sellers can put items up for free, no need for _price check
-    
+
     // Mint more tokens
      // mint() does not use a URI or data input at all
     IPazariTokenMVP(tokenContract).mint(
-      msg.sender, 
-      tokenID, 
-      _amount, 
-      "", 
+      msg.sender,
+      tokenID,
+      _amount,
+      "",
       ""
     );
 
     // Restock tokens on Marketplace
-    iMarketplace.restockItem(_itemID, _amount);
+    marketplace.restockItem(_itemID, _amount);
 
     emit NewTokenListed(_itemID, tokenContract, _price, tokenID, _amount);
     return true;
@@ -237,10 +227,10 @@ contract PazariMVP is ERC1155Holder {
     iPazariTokenMVP = IPazariTokenMVP(tokenContract);
 
     // Check caller owns tokenContract of itemID they are pulling
-    require(item.tokenContract == userProfile[msg.sender].tokenContract, 
+    require(item.tokenContract == userProfile[msg.sender].tokenContract,
         "You don't own that item");
 
-    iMarketplace.pullStock(_itemID, item.amount);
+    marketplace.pullStock(_itemID, item.amount);
     iPazariTokenMVP.burn(item.tokenID, item.amount);
     return true;
   }

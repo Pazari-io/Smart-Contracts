@@ -11,7 +11,7 @@
  * However, they are not transferrable to anyone who isn't an
  * owner of the contract. These tokens are pseudo-NFTs.
  *
- * TokenIDs start at 1 instead of 0. TokenID 0 can be used for
+ *  start at 1 instead of 0. TokenID 0 can be used for
  * existence checking.
  *
  * All tokenHolders are tracked inside of each tokenID's TokenProps,
@@ -63,7 +63,7 @@ contract PazariTokenMVP is Pazari1155 {
    * False = Limited Edition, cannot be minted -- supplyCap >= totalSupply
    */
   modifier isMintable(uint256 _tokenID) {
-    require(tokenIDs[_tokenID - 1].isMintable, "Minting disabled");
+    require(tokenProps[_tokenID - 1].isMintable, "Minting disabled");
     _;
   }
 
@@ -92,7 +92,7 @@ contract PazariTokenMVP is Pazari1155 {
    * @dev Returns an array of all holders of a _tokenID
    */
   function tokenHolders(uint256 _tokenID) external view returns (address[] memory) {
-    return tokenIDs[_tokenID - 1].tokenHolders;
+    return tokenProps[_tokenID - 1].tokenHolders;
   }
 
   /**
@@ -135,14 +135,14 @@ contract PazariTokenMVP is Pazari1155 {
   ) internal returns (uint256 tokenID) {
     address[] memory emptyTokenHoldersArray;
     TokenProps memory newToken = TokenProps(
-      tokenIDs.length + 1,
+      tokenProps.length + 1,
       _newURI,
       _amount,
       _supplyCap,
       _isMintable,
       emptyTokenHoldersArray
     );
-    tokenIDs.push(newToken);
+    tokenProps.push(newToken);
     tokenID = newToken.tokenID;
 
     require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
@@ -201,7 +201,7 @@ contract PazariTokenMVP is Pazari1155 {
     string memory,
     bytes memory
   ) external onlyOwners isMintable(_tokenID) returns (bool) {
-    TokenProps memory tokenProperties = tokenIDs[_tokenID - 1];
+    TokenProps memory tokenProperties = tokenProps[_tokenID - 1];
     require(tokenProperties.totalSupply > 0, "Token does not exist");
     if (tokenProperties.supplyCap != 0) {
       // Check that new amount does not exceed the supply cap
@@ -213,7 +213,7 @@ contract PazariTokenMVP is Pazari1155 {
   }
 
   /**
-   * @dev Performs a multi-token airdrop of each _amounts[i] for each _tokenIDs[i] to each _recipients[j]
+   * @dev Performs a multi-token airdrop of each _amounts[i] for each _[i] to each _recipients[j]
    *
    * @param _tokenIDs Tokens being airdropped
    * @param _amounts Amount of each token being sent to each recipient
@@ -225,7 +225,7 @@ contract PazariTokenMVP is Pazari1155 {
     uint256[] memory _amounts,
     address[] memory _recipients
   ) external onlyOwners returns (bool) {
-    require(_amounts.length == _tokenIDs.length, "Amounts and tokenIDs must be same length");
+    require(_amounts.length == _tokenIDs.length, "Amounts and tokenProps must be same length");
     uint256 i; // TokenID and amount counter
     uint256 j; // Recipients counter
     // Iterate through each tokenID:
@@ -262,6 +262,6 @@ contract PazariTokenMVP is Pazari1155 {
    * with OpenSea's standards.
    */
   function uri(uint256 _tokenID) public view virtual override returns (string memory) {
-    return tokenIDs[_tokenID - 1].uri;
+    return tokenProps[_tokenID - 1].uri;
   }
 }

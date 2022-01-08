@@ -3,11 +3,6 @@
  *
  * @dev This is the ERC1155 contract that PazariTokens are made from. All ERC1155-native
  * functions are here, as well as Pazari-native functions that are essential.
- *
- *
- *
- * note What does it not require that we have ERC1155 events in here? I've tried adding
- * them in and Solidity doesn't allow it. I don't think
  */
 
 // SPDX-License-Identifier: MIT
@@ -38,13 +33,13 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
   mapping(address => bool) internal isOwner;
 
   // Public array of all TokenProps structs created
-  // Newest tokenID is tokenIDs.length
-  TokenProps[] public tokenIDs;
+  // Newest tokenID is tokenProps.length
+  TokenProps[] public tokenProps;
 
   /**
    * @dev Struct to track token properties.
    *
-   * note I decided to include tokenID here since tokenID - 1 is needed for tokenIDs[],
+   * note I decided to include tokenID here since tokenID - 1 is needed for tokenProps[],
    * which may get confusing. We can use the tokenID property to double-check that we
    * are accessing the correct token's properties. It also looks and feels more intuitive
    * as well for a struct that tells us everything we need to know about a tokenID.
@@ -75,7 +70,7 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
    * @dev Restricts access to the owner(s) of the contract
    */
   modifier onlyOwners() {
-    require(isOwner[msg.sender], "Only contract owners permitted");
+    require(isOwner[_msgSender()], "Only contract owners permitted");
     _;
   }
 
@@ -162,7 +157,7 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
    * @dev Internal function that updates URI;
    */
   function _setURI(string memory _newURI, uint256 _tokenID) internal {
-    tokenIDs[_tokenID - 1].uri = _newURI;
+    tokenProps[_tokenID - 1].uri = _newURI;
   }
 
   /**
@@ -327,10 +322,10 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
    * put them back on the list of tokenOwners if they receive another token.
    */
   function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
-    _burn(tx.origin, _tokenID, _amount);
+    _burn(_msgSender(), _tokenID, _amount);
     // After successful burn, if balanceOf == 0 then set tokenHolder address to address(0)
-    if (balanceOf(tx.origin, _tokenID) == 0) {
-      tokenIDs[_tokenID - 1].tokenHolders[tokenHolderIndex[tx.origin][_tokenID]] = address(0);
+    if (balanceOf(_msgSender(), _tokenID) == 0) {
+      tokenProps[_tokenID - 1].tokenHolders[tokenHolderIndex[_msgSender()][_tokenID]] = address(0);
     }
     return true;
   }
@@ -344,10 +339,10 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
    * put them back on the list of tokenOwners if they receive another token.
    */
   function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool) {
-    _burnBatch(msg.sender, _tokenIDs, _amounts);
+    _burnBatch(_msgSender(), _tokenIDs, _amounts);
     for (uint256 i = 0; i < _tokenIDs.length; i++) {
-      if (balanceOf(msg.sender, _tokenIDs[i]) == 0) {
-        tokenIDs[_tokenIDs[i] - 1].tokenHolders[tokenHolderIndex[msg.sender][_tokenIDs[i]]] = address(0);
+      if (balanceOf(_msgSender(), _tokenIDs[i]) == 0) {
+        tokenProps[_tokenIDs[i] - 1].tokenHolders[tokenHolderIndex[_msgSender()][_tokenIDs[i]]] = address(0);
       }
     }
     return true;
@@ -469,7 +464,7 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
     // If recipient does not own a token, then add their address to tokenHolders
     for (uint256 i = 0; i < ids.length; i++) {
       if (tempBools[i] == false) {
-        tokenIDs[ids[i] - 1].tokenHolders.push(to);
+        tokenProps[ids[i] - 1].tokenHolders.push(to);
       }
     }
   }
