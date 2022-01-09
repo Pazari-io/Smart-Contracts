@@ -73,6 +73,7 @@ contract PaymentRouter is Context {
     bool isActive; // Is route currently active?
   }
 
+  // Enum that is used to auto-adjust routeTax if minTax/maxTax are adjusted
   enum TAXTYPE {
     CUSTOM,
     MINTAX,
@@ -158,7 +159,7 @@ contract PaymentRouter is Context {
     PaymentRoute memory route = paymentRouteID[_routeID];
 
     // If route tax is set to Custom:
-    if (route.taxType != TAXTYPE.MINTAX && route.taxType != TAXTYPE.MAXTAX) {
+    if (route.taxType == TAXTYPE.CUSTOM) {
       // If routeTax doesn't meet minTax, then it is set to minTax
       if (route.routeTax < minTax) {
         route.routeTax = minTax;
@@ -320,21 +321,19 @@ contract PaymentRouter is Context {
     uint16[] calldata _commissions,
     uint16 _routeTax
   ) external newRouteChecks(_recipients, _commissions) returns (bytes32 routeID) {
-    require(_routeTax <= 10000, "Tax cannot be larger than 10000");
-
     // Creates routeID from hashing contents of new PaymentRoute
     routeID = getPaymentRouteID(_msgSender(), _recipients, _commissions);
 
-    TAXTYPE taxType = TAXTYPE.CUSTOM;
+    TAXTYPE taxType;
 
     // Logic for fixing _routeTax to minTax or maxTax values
-    // _routeTax = 0 sets to minTax
-    // _routeTax = 10000 sets to maxTax
-    if (_routeTax == 0) {
+    // _routeTax < minTax sets to minTax
+    // _routeTax > 10000 sets to maxTax
+    if (_routeTax < minTax) {
       _routeTax = minTax;
       taxType = TAXTYPE.MINTAX;
     }
-    if (_routeTax == 10000) {
+    if (_routeTax > 10000) {
       _routeTax = maxTax;
       taxType = TAXTYPE.MAXTAX;
     }
