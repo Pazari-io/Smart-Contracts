@@ -102,7 +102,7 @@ contract OpenRouteTest is PaymentRouterSetup {
     }
   }
 
-  function test_commissionTooBig() public {
+  function test_commissionsTooBig() public {
     address[] memory recipients = new address[](1);
     recipients[0] = address(users[0]);
     uint16[] memory commissions = new uint16[](1);
@@ -357,9 +357,82 @@ contract PushTokensTest is PaymentRouterSetup {
     //Check failed transfer
     assertEq(pr.tokenBalanceToCollect(address(recipient), address(erc20)), totalAmount);
   }
+
+  function test_standardRoute_multiSender(uint8 rnum, uint8 snum) public {
+    //Avoid this case
+    if (rnum == 0 || snum == 0 || rnum > 25 || snum > 25) return;
+
+    //Create standard route
+    bytes32 routeID;
+    address[] memory recipients;
+    uint16[] memory commissions;
+    (routeID, recipients, commissions) = createStandardRoute(rnum, 100);
+
+    //Mint token to sender
+    uint256 amount = 123e18;
+    ERC20 erc20 = erc20s[0];
+    PRUser[] memory senders = createPRUsers(snum);
+    erc20Mint(0, fromPRUsers(senders), amount);
+
+    for (uint256 i = 0; i < snum; i++) {
+      //Sender approves token transfer to pr
+      senders[i].approveERC20(erc20, address(pr), amount);
+      //Sender push tokens to pr
+      bool success = pr.pushTokens(routeID, address(erc20), address(senders[i]), amount);
+      assertTrue(success);
+    }
+
+    //Check treasury & recipients balance
+    uint256 totalTax = (amount * snum * 100) / 10000;
+    assertEq(erc20.balanceOf(address(treasury)), totalTax);
+    for (uint256 i = 0; i < rnum; i++) {
+      assertEq(
+        erc20.balanceOf(address(recipients[i])),
+        ((amount * snum - totalTax) * commissions[i]) / 10000
+      );
+    }
+  }
+
+  function test_standardRoute_multiToken(uint8 rnum, uint8 tnum) public {
+    //Avoid this case
+    if (rnum == 0 || rnum > 20 || tnum == 0 || tnum > 20) return;
+
+    //Create standard route
+    bytes32 routeID;
+    address[] memory recipients;
+    uint16[] memory commissions;
+    (routeID, recipients, commissions) = createStandardRoute(rnum, 100);
+
+    //Mint token to sender
+    uint256 amount = 123e18;
+    PRUser sender = users[0];
+    if (tnum > erc20Amount) {
+      erc20sDeploy(tnum - erc20Amount);
+    }
+    for (uint8 i = 0; i < tnum; i++) {
+      erc20Mint(i, address(sender), amount);
+    }
+
+    for (uint256 i = 0; i < tnum; i++) {
+      //Sender approves token transfer to pr
+      sender.approveERC20(erc20s[i], address(pr), amount);
+      //Sender pushes token to pr
+      bool success = pr.pushTokens(routeID, address(erc20s[i]), address(sender), amount);
+      assertTrue(success);
+    }
+
+    //Check treasury & recipients balance
+    for (uint256 i = 0; i < tnum; i++) {
+      uint256 tax = (amount * 100) / 10000;
+      assertEq(erc20s[i].balanceOf(address(treasury)), tax);
+      for (uint256 j = 0; j < rnum; j++) {
+        assertEq(erc20s[i].balanceOf(address(recipients[j])), ((amount - tax) * commissions[j]) / 10000);
+      }
+    }
+  }
 }
 
-contract HoldsTokensTest is PaymentRouterSetup {
+contract HoldTokensTest is PaymentRouterSetup {
   function test_simpleRoute(uint128 _amount) public {
     //Mint token to sender
     PRUser sender = users[0];
@@ -380,6 +453,31 @@ contract HoldsTokensTest is PaymentRouterSetup {
     assertEq(erc20.balanceOf(address(recipient)), 0);
     assertEq(erc20.balanceOf(address(pr)), amount - (amount * 100) / 10000);
   }
+
+  function test_closedRoute() public {
+    //Mint token to sender
+    PRUser sender = users[0];
+    ERC20 erc20 = erc20s[0];
+    uint256 amount = 1e18;
+    erc20Mint(0, address(sender), amount);
+
+    //Create route
+    (bytes32 routeID, address recipient) = createSimpleRoute();
+
+    //Close route
+    pr.togglePaymentRoute(routeID);
+
+    //Sender approves token transfer to pr
+    sender.approveERC20(erc20, address(pr), amount);
+    //Sender holds token to pr
+    bool success = pr.holdTokens(routeID, address(erc20), address(sender), amount);
+
+    //Check balance
+    assertTrue(success);
+    assertEq(erc20.balanceOf(address(treasury)), (amount * 100) / 10000);
+    assertEq(erc20.balanceOf(address(recipient)), 0);
+    assertEq(erc20.balanceOf(address(pr)), amount - (amount * 100) / 10000);
+  }
 }
 
 contract PullTokensTest is PaymentRouterSetup {
@@ -395,15 +493,46 @@ contract PullTokensTest is PaymentRouterSetup {
     //Create router
     (bytes32 routeID, address recipient) = createSimpleRoute();
 
-    //User1 approve token transfer to pr
+    //Sender approves token transfer to pr
     sender.approveERC20(erc20, address(pr), amount);
-    //User1 push token to pr
+    //Sender holds token to pr
     pr.holdTokens(routeID, address(erc20), address(sender), amount);
 
+    //Recipient pulls token
     bool success = toPRUser(recipient).pullTokens(pr, address(erc20));
-    assertTrue(success);
 
+    //Check balance
+    assertTrue(success);
     assertEq(erc20.balanceOf(recipient), amount - (amount * 100) / 10000);
+    assertEq(erc20.balanceOf(address(pr)), 0);
+  }
+
+  function test_pullMultipleTimes(uint8 num, uint128 _amount) public {
+    //Avoid this case
+    if (_amount == 0 || num > 100) return;
+
+    //Mint token to sender
+    PRUser sender = users[0];
+    ERC20 erc20 = erc20s[0];
+    uint256 amount = uint256(_amount);
+    erc20Mint(0, address(sender), amount * num);
+
+    //Sender approves token transfer to pr
+    sender.approveERC20(erc20, address(pr), type(uint256).max);
+
+    //Create router
+    (bytes32 routeID, address recipient) = createSimpleRoute();
+
+    for (uint8 i = 0; i < num; i++) {
+      //Sender approves token transfer to pr
+      sender.approveERC20(erc20, address(pr), amount);
+      //Sender holds token to pr
+      pr.holdTokens(routeID, address(erc20), address(sender), amount);
+      //Recipient pulls token
+      toPRUser(recipient).pullTokens(pr, address(erc20));
+    }
+
+    assertEq(erc20.balanceOf(recipient), amount * num - (amount * num * 100) / 10000);
     assertEq(erc20.balanceOf(address(pr)), 0);
   }
 }

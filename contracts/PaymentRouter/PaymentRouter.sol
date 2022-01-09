@@ -247,6 +247,8 @@ contract PaymentRouter is Context {
    * sellers who want PaymentRoutes with more than 10 recipients, then I will create a special
    * smart contract for efficiently handling token distribution that could be used for hundreds
    * of recipients without hitting the buyer with a huge gas fee (or potentially running out of gas).
+   *
+   * Comment: No closed route checks?
    */
   function holdTokens(
     bytes32 _routeID,
@@ -299,6 +301,7 @@ contract PaymentRouter is Context {
 
     // Erase recipient's balance
     tokenBalanceToCollect[_msgSender()][_tokenAddress] = 1; // Use 1 for 0 to save on gas
+    //Comment: Assiging to 0 and 1 shouldn't change the gas cost. I think it's *delete* that will free up the space.
 
     // Call token contract and transfer balance from this contract to recipient
     require(IERC20(_tokenAddress).transfer(msg.sender, payment), "Transfer failed");

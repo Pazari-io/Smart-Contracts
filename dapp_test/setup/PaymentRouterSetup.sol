@@ -67,8 +67,8 @@ contract PaymentRouterSetup is DSTestExtended, User {
 
   //Settings
   uint8 numDevs = 5;
-  uint8 numUsers = 5;
-  uint8 erc20Amount = 10;
+  uint8 numUsers = 10;
+  uint8 erc20Amount = 5;
   uint16 minTax = 50;
   uint16 maxTax = 5000;
 
@@ -91,8 +91,24 @@ contract PaymentRouterSetup is DSTestExtended, User {
     erc20sDeploy(erc20Amount);
   }
 
+  function createPRUsers(uint256 num) public virtual returns (PRUser[] memory) {
+    PRUser[] memory prUsers = new PRUser[](num);
+    for (uint256 i = 0; i < num; i++) {
+      prUsers[i] = new PRUser();
+    }
+    return prUsers;
+  }
+
   function toPRUser(address userAddr) public virtual returns (PRUser) {
     return PRUser(payable(userAddr));
+  }
+
+  function fromPRUsers(PRUser[] memory prUsers) public virtual returns (address[] memory) {
+    address[] memory prUsersAddr = new address[](prUsers.length);
+    for (uint256 i = 0; i < prUsers.length; i++) {
+      prUsersAddr[i] = address(prUsers[i]);
+    }
+    return prUsersAddr;
   }
 
   function paymentRouterDeploy(uint16 _minTax, uint16 _maxTax) public virtual {
@@ -118,6 +134,18 @@ contract PaymentRouterSetup is DSTestExtended, User {
     require(index < erc20s.length, "Invalid array length");
     ERC20PresetMinterPauser erc20 = ERC20PresetMinterPauser(address(erc20s[index]));
     erc20.mint(to, amount);
+  }
+
+  function erc20Mint(
+    uint8 index,
+    address[] memory to,
+    uint256 amount
+  ) public virtual {
+    require(index < erc20s.length, "Invalid array length");
+    ERC20PresetMinterPauser erc20 = ERC20PresetMinterPauser(address(erc20s[index]));
+    for (uint256 i = 0; i < to.length; i++) {
+      erc20.mint(to[i], amount);
+    }
   }
 
   function createSimpleRoute() public returns (bytes32, address) {
