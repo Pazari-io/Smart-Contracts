@@ -18,6 +18,8 @@ contract FactoryPazariTokenMVP {
    * then the logic in _msgSender() will use msg.sender instead of tx.origin, and the factory
    * will become the originalOwner of the new token contract--thus locking out the contract
    * creator. The alternative is to include the caller's wallet address in _contractOwners.
+   * Normally we would set this inside the function, but this contract is right on the edge
+   * of its bytecode size limit and can't fit much more logic inside it.
    */
   function newPazariTokenMVP(address[] memory _contractOwners) external returns (address newContract) {
     PazariTokenMVP _newContract = new PazariTokenMVP(_contractOwners);
