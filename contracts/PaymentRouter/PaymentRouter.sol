@@ -1,28 +1,3 @@
-/**
- * PATCH NOTES:
- * - Added AccessControlPR contract, which replaces all access control functions with
- *   a single uniform contract that is easier to find and follow, see below.
- * - Replaced function modifiers with AccessControlPR modifiers
- * - Implemented a design where only Pazari-owned addresses can use the core functions
- *   of the PaymentRouter contract. This includes developer wallets, which later on
- *   can be removed and replaced with multi-sig contracts.
- * -  - Implemented a design that uses tx.origin and msg.sender to detect when a caller
- *   is calling from a Pazari contract versus a wallet. As long as we repeat this
- *   design through every contract it won't be vulnerable to phishing attacks. Take 
- *   a look at the _msgSender() function in PR, PMVP, and MP to make sure they are all
- *   the same design.
- * - Fixed a bug in holdTokens: PaymentRoute was being stored via paymentRouteID
- *   mapping, and mappings that return structs do NOT return arrays in the structs.
- *   I created a getter function to address this. This was causing all payments to
- *   go to one account. Now, holdTokens and pullTokens work as intended, while never
- *   resetting back to 0, thus saving buyers on gas costs.
- * - 
- * 
- * Comments:
- * 
- */
-
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -95,7 +70,9 @@ contract AccessControlPR {
   modifier onlyRouteAdmin(bytes32 _routeID) {
     require(
       routeCreator[_routeID] == _msgSender() ||
-      isRouteAdmin[_routeID][_msgSender()], "Caller is neither admin nor route creator"
+      isRouteAdmin[_routeID][_msgSender()] ||
+      isAdmin[_msgSender()], 
+      "Caller is neither admin nor route creator"
     );
     _;
   }  
@@ -202,6 +179,12 @@ contract PaymentRouter is AccessControlPR {
 
   // Fires when an admin sets a new address for the Pazari treasury
   event TreasurySet(address oldAddress, address newAddress, address adminCaller, uint256 timestamp);
+
+  // Fires when the pazariTreasury address is altered
+  event TreasuryChanged(address oldAddress, address newAddress, address indexed adminAuthorized, string memo, uint256 timestamp);
+
+  // Fires when recipient max values are altered
+  event MaxRecipientsChanged(uint8 newMaxRecipients, address indexed adminAuthorized, string memo, uint256 timestamp);
 
   //***MAPPINGS***\\
   // Maps available payment token balance per recipient for pull function
@@ -627,12 +610,6 @@ contract PaymentRouter is AccessControlPR {
     emit RouteTaxBoundsChanged(_minTax, _maxTax);
   }
 
-  // Fires when the pazariTreasury address is altered
-  event TreasuryChanged(address oldAddress, address newAddress, address adminAuthorized, string memo, uint256 timestamp);
-
-  // Fires when recipient max values are altered
-  event MaxRecipientsChanged(uint8 newMaxRecipients, address adminAuthorized, string memo, uint256 timestamp);
-
   /**
    * @notice Sets the treasury's address
    *
@@ -665,7 +642,7 @@ contract PaymentRouter is AccessControlPR {
   /**
    * @notice Returns a PaymentRoute struct
    * @dev This exists because directly accessing the mapping wasn't returning the recipients and
-   * commissions arrays inside holdTokens() and pushTokens().
+   * an commissions arrays inside holdTokens() and pushTokens().
    */
   function getPaymentRoute(bytes32 _routeID) public view returns (PaymentRoute memory paymentRoute) {
     return paymentRouteID[_routeID];
@@ -677,7 +654,7 @@ contract PaymentRouter is AccessControlPR {
    * @dev The mapping is always +1 to the actual balance, and this function compensates for that.
    * @dev This function hides account balances from public view, only account owners and admins may call it.
    */
-  function getPaymentBalance(address _recipientAddress, address _tokenAddress) public view returns(uint balance){
+  function getPaymentBalance(address _recipientAddress, address _tokenAddress) public view returns(uint256 balance){
     require(_msgSender() == _recipientAddress || isAdmin[_msgSender()], "Caller not owner of account");
     // Logic for returning 0 when account is empty
     if(tokenBalanceToCollect[_recipientAddress][_tokenAddress] <= 1){
