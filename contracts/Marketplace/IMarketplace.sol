@@ -9,7 +9,9 @@
 pragma solidity ^0.8.0;
 
 interface IMarketplace {
-  // EVENTS
+  
+  //***EVENTS***\\
+
   // Fires when a MarketItem is sold;
   event MarketItemSold(uint256 indexed itemID, uint256 amount, address owner);
 
@@ -43,7 +45,6 @@ interface IMarketplace {
     address tokenContract;
     uint256 tokenID;
     uint256 amount;
-    address owner;
     uint256 price;
     address paymentContract;
     bool isPush;
@@ -53,13 +54,13 @@ interface IMarketplace {
     uint256 itemLimit;
   }
 
-  // FUNCTIONS
+  //***FUNCTIONS: SETTERS***\\
 
   /**
    * @notice Creates a MarketItem struct and assigns it an itemID
+   * @notice This version is for custom MarketItems
    *
    * @param _tokenContract Token contract address of the item being sold
-   * @param _ownerAddress Owner's address that can access modifyMarketItem() (MVP: msg.sender)
    * @param _tokenID The token contract ID of the item being sold
    * @param _amount The amount of items available for purchase (MVP: 0)
    * @param _price The price--in payment tokens--of the item being sold
@@ -69,16 +70,12 @@ interface IMarketplace {
    * @param _routeID The routeID of the payment route assigned to this item
    * @param _itemLimit How many items a buyer can own, 0 == no limit (MVP: 1)
    * @param _routeMutable Assigns mutability to the routeID, keep false for most items (MVP: false)
-   * @return itemID ItemID of the market item
+   * @return itemID The itemID of the new MarketItem
    *
-   * @dev Emits MarketItemCreated event
-   *
-   * @dev Front-end must call IERC1155.setApprovalForAll(marketAddress, true) for any ERC1155 token
-   * that is NOT a Pazari1155 contract. Pazari1155 will have auto-approval for Marketplace.
+   * Emits MarketItemCreated event
    */
   function createMarketItem(
     address _tokenContract,
-    address _ownerAddress,
     uint256 _tokenID,
     uint256 _amount,
     uint256 _price,
@@ -91,12 +88,22 @@ interface IMarketplace {
   ) external returns (uint256 itemID);
 
   /**
-   * @notice Accesses the marketItems[] array
-   * @return MarketItem MarketItem struct stored at _index
-   *
-   * @dev _index = itemID - 1
+   * @notice Overloaded function that takes less parameters
+   * @dev Assumes the following values:
+   * - isPush = true
+   * - forSale = true
+   * - itemLimit = 1
+   * - routeMutable = false
+   * @return itemID The itemID of the new MarketItem
    */
-  function marketItems(uint256 _index) external view returns (MarketItem memory);
+  function createMarketItem(
+    address _tokenContract,
+    uint256 _tokenID,
+    uint256 _amount,
+    uint256 _price,
+    address _paymentContract,
+    bytes32 _routeID
+  ) external returns (uint256 itemID);
 
   /**
    * @notice Purchases an _amount of market item itemID
@@ -107,7 +114,8 @@ interface IMarketplace {
    *
    * @dev Emits ItemSoldOut when last item is bought and MarketItemSold for every purchase
    *
-   * @dev Providing _amount == 0 will purchase the item's full itemLimit.
+   * @dev Providing _amount == 0 will purchase the item's full itemLimit, which
+   * for most items will be 1
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount) external returns (bool);
 
@@ -115,38 +123,34 @@ interface IMarketplace {
    * @notice Transfers more stock to a MarketItem, requires minting more tokens first and setting
    * approval for Marketplace.
    *
-   * @dev NOT USED FOR MVP
-   *
    * @param _itemID MarketItem ID
    * @param _amount Amount of tokens being restocked
+   * @return bool Success bool
    *
    * @dev Emits ItemRestocked event
    */
-  function restockItem(uint256 _itemID, uint256 _amount) external;
+  function restockItem(uint256 _itemID, uint256 _amount) external returns (bool);
 
   /**
    * @notice Removes _amount of item tokens for _itemID and transfers back to seller's wallet
    *
-   * @dev NOT USED FOR MVP
-   *
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
-   *
+   * @return bool Success bool
+   * 
    * @dev Emits StockPulled event
    */
-  function pullStock(uint256 _itemID, uint256 _amount) external;
+  function pullStock(uint256 _itemID, uint256 _amount) external returns (bool);
 
   /**
    * @notice Function that allows item creator to change price, accepted payment
    * token, whether token uses push or pull routes, and payment route.
    *
-   * @dev MVP SHOULD ONLY CHANGE PRICE
-   *
    * @param _itemID Market item ID
    * @param _price Market price--in stablecoins
    * @param _paymentContract Contract address of token accepted for payment (MVP: stablecoin address)
    * @param _isPush Tells PaymentRouter to use push or pull function (MVP: true)
-   * @param _routeID Payment route ID, only mutable if routeMutable == true (MVP: 0)
+   * @param _routeID Payment route ID, only useful if routeMutable == true (MVP: 0)
    * @param _itemLimit Buyer's purchase limit for item (MVP: 1)
    * @return Sucess boolean
    *
@@ -162,16 +166,40 @@ interface IMarketplace {
   ) external returns (bool);
 
   /**
-   * @notice Toggles whether an item is for sale or not
+   * @dev Toggles whether an item is for sale or not
    *
    * @dev Use this function to activate/deactivate items for sale on market. Only items that are
    * forSale will be returned by getInStockItems().
    *
    * @param _itemID Marketplace ID of item for sale
-   *
-   * @dev Emits ForSaleToggled event
+   * @return forSale True = item was reactivated, false = item was deactivated
    */
-  function toggleForSale(uint256 _itemID) external;
+  function toggleForSale(uint256 _itemID) external returns (bool forSale);
+
+  /**
+   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
+   * @dev If tokenID is a MarketItem, then it will only send back the excess tokens not accounted
+   * for by MarketItem.amount.
+   *
+   * @param _nftContract Contract address of NFT to recover
+   * @param _tokenID Token ID of the NFT to recover
+   * @param _amount Amount of tokens to recover
+   */
+  function recoverNFT(
+    address _nftContract,
+    uint256 _tokenID,
+    uint256 _amount
+  ) external returns (bool);
+
+  //***FUNCTIONS: GETTERS***\\
+
+  /**
+   * @notice Directly accesses the marketItems[] array
+   * @return MarketItem MarketItem struct stored at _index
+   *
+   * @dev _index = itemID - 1
+   */
+  function marketItems(uint256 _index) external view returns (MarketItem memory);
 
   /**
    * @notice Returns an array of all items for sale on marketplace
@@ -189,6 +217,12 @@ interface IMarketplace {
   function getMarketItems(uint256[] memory _itemIDs) external view returns (MarketItem[] memory marketItems_);
 
   /**
+   * @notice Returns an array of MarketItems created the seller's address
+   * @dev No restrictions for calling this
+   */
+  function getSellersMarketItems(address _sellerAddress) external view returns (uint256[] memory);
+
+  /**
    * @notice Checks if an address owns any itemIDs
    *
    * @param _owner The address being checked
@@ -197,5 +231,61 @@ interface IMarketplace {
    * @dev This function can be used to check for tokens across multiple contracts, and is better than the
    * ownsTokens() function in the PazariTokenMVP contract. This is the only function we will need to call.
    */
-  function ownsTokens(address _owner, uint256[] memory _itemIDs) external view returns (bool[] memory);
+  function ownsTokens(address _owner, uint256[] memory _itemIDs) external view returns (bool[] memory hasToken);
+}
+
+/**
+ * @notice All access control functions and events used by Marketplace
+ * @dev Not needed for MVP, but they're here if needed
+ */
+interface IAccessControlMP {
+
+  // Fires when admins are added or removed
+  event AdminAdded(address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
+  event AdminRemoved(address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
+
+  // Fires when item admins are added or removed
+  event ItemAdminAdded(uint256 itemID, address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
+  event ItemAdminRemoved(uint256 itemID, address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
+
+  // Fires when an address is blacklisted/whitelisted from the Pazari Marketplace
+  event AddressBlacklisted(address blacklistedAddress, address adminAddress, string memo, uint256 timestamp);
+  event AddressWhitelisted(address whitelistedAddress, address adminAddress, string memo, uint256 timestamp);
+  
+  /**
+   * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
+   * for everything else. See IPaymentRouter for more details.
+    */
+  function _msgSender() external view returns (address);
+
+  // Accesses isAdmin mapping
+  function isAdmin(address _addressToCheck) external view returns (bool);
+
+  // Accesses isItemAdmin mapping
+  function isItemAdmin(bytes32 _itemID, address _addressToCheck) external view returns (bool);
+
+  // Accesses isBlacklisted mapping
+  function isBlacklisted(address _addressToCheck) external view returns (bool);
+
+  // Accesses itemCreator mapping
+  function itemCreator(uint256 _itemID) external view returns (address itemCreator);
+
+  // Adds an address to isAdmin mapping
+  function addAdmin(address _newAddress, string memory _memo) external returns (bool);
+
+  // Removes an address from isAdmin mapping
+  function removeAdmin(address _oldAddress, string memory _memo) external returns (bool);
+  
+  // Adds an address to isItemAdmin mapping
+  function addItemAdmin(uint256 _itemID, address _newAddress, string memory _memo) external returns (bool);
+
+  // Removes an address from isItemAdmin mapping
+  function removeItemAdmin(uint256 _itemID, address _oldAddress, string memory _memo) external returns (bool);
+
+  /**
+   * @notice Toggles isBlacklisted for an address. Can only be called by Pazari
+   * Marketplace admins.
+   */
+  function toggleBlacklist(address _listedAddress, string memory _memo) external returns(bool);
+
 }
