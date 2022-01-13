@@ -147,3 +147,24 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID) external view returns (uint256);
 
 }
+
+
+interface AccessControlPTMVP {
+
+  // Accesses isAdmin mapping
+  function isAdmin(address _adminAddress) external view returns (bool);
+
+  /**
+   * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
+   * for everything else. See PaymentRouter for more details.
+   */
+  function _msgSender() external view returns (address);
+
+  // Adds an address to isAdmin mapping
+  function addAdmin(address _newAddress) external returns (bool);
+
+  // Removes an address from isAdmin mapping
+  function removeAdmin(address _oldAddress) external returns (bool);
+
+}
+
