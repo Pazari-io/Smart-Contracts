@@ -115,7 +115,6 @@ contract AccessControlMP {
 
     return true;
   }
-
  
   /**
    * @notice Requires that both msg.sender and tx.origin be admins. This restricts all
@@ -174,6 +173,9 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   // Fires when forSale is toggled on or off for an itemID
   event ForSaleToggled(uint256 itemID, bool forSale);
 
+  // Fires when a MarketItem has been deleted
+  event MarketItemDeleted(uint256 itemID, address indexed itemAdmin, uint256 timestamp);
+
   // Fires when market item details are modified
   event MarketItemChanged(
     uint256 itemID,
@@ -220,6 +222,14 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   constructor(address _paymentRouter, address[] memory _admins) AccessControlMP(_admins) {
     //Connect to payment router contract
     iPaymentRouter = IPaymentRouter(_paymentRouter);
+  }
+
+  // Checks if an item was deleted or if _itemID is valid
+  modifier itemExists(uint256 _itemID) {
+    MarketItem memory item = marketItems[_itemID - 1];
+    require(item.itemID == _itemID, "Item was deleted");
+    require(_itemID <= marketItems.length, "Invalid itemID");
+    _;
   }
 
   /**
@@ -422,7 +432,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * note Providing _amount == 0 will purchase the item's full itemLimit.
    */
-  function buyMarketItem(uint256 _itemID, uint256 _amount) external noBlacklist returns (bool) {
+  function buyMarketItem(uint256 _itemID, uint256 _amount) external noBlacklist itemExists(_itemID) returns (bool) {
     // Pull data from itemID's MarketItem struct
     MarketItem memory item = marketItems[_itemID - 1];
     uint256 balance = IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID);
@@ -432,10 +442,13 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     uint256 totalCost = item.price * _amount;
 
     /* ========== CHECKS ========== */
-    require(_itemID <= marketItems.length, "Item does not exist");
-    require(item.forSale, "Item not for sale");
+    require(
+      !isItemAdmin[item.itemID][_msgSender()] ||
+      itemCreator[item.itemID] != _msgSender(), 
+      "Can't buy your own item"
+    );
     require(item.amount > 0, "Item sold out");
-    require(!isItemAdmin[item.itemID][_msgSender()], "Can't buy your own item");
+    require(item.forSale, "Item not for sale");
     require(balance < itemLimit, "Buyer already owns the item limit");
     // If _amount == 0, then purchase itemLimit - balance
     // If _amount + balance surpasses itemLimit, then purchase itemLimit - balance
@@ -488,20 +501,26 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ItemRestocked event
    */
-  function restockItem(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) returns (bool) {
+  function restockItem(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     /* ========== CHECKS ========== */
     MarketItem memory item = marketItems[_itemID - 1];
-    require(marketItems.length >= _itemID, "MarketItem does not exist");
     require(IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount, "Insufficient token balance");
 
     /* ========== EFFECTS ========== */
-    marketItems[_itemID - 1].amount += _amount;
-    emit ItemRestocked(_itemID, _amount);
+    // If item is out of stock
+    if(item.amount == 0){
+      itemsSoldOut.decrement();
+      item.forSale = true;
+    }
+
+    item.amount += _amount;
+    marketItems[_itemID - 1] = item; // Update actual market item
 
     /* ========== INTERACTIONS ========== */
     IERC1155(item.tokenContract).safeTransferFrom(_msgSender(), address(this), item.tokenID, _amount, "");
 
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == marketItems[_itemID - 1].amount);
+    emit ItemRestocked(_itemID, _amount);
     return true;
   }
 
@@ -513,17 +532,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits StockPulled event
    */
-  function pullStock(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) returns (bool) {
+  function pullStock(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     /* ========== CHECKS ========== */
-    // itemID will always be <= marketItems.length, but cannot be > marketItems.length
-    require(_itemID <= marketItems.length, "MarketItem does not exist");
     // Store initial values
     MarketItem memory item = marketItems[_itemID - 1];
     require(item.amount >= _amount, "Not enough inventory to pull");
 
-    // Pulls all remaining tokens if _amount == 0
-    if (_amount == 0) {
+    // Pulls all remaining tokens if _amount == 0, sets forSale to false
+    if (_amount == 0 || _amount >= item.amount) {
       _amount = item.amount;
+      marketItems[_itemID - 1].forSale = false;
+      itemsSoldOut.increment();
     }
 
     /* ========== EFFECTS ========== */
@@ -535,7 +554,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     emit ItemPulled(_itemID, _amount);
 
     // Assert internal balances updated correctly, item.amount was initial amount
-    assert(marketItems[_itemID - 1].amount < item.amount);
+    //assert(marketItems[_itemID - 1].amount < item.amount);
     return true;
   }
 
@@ -568,7 +587,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bool _isPush,
     bytes32 _routeID,
     uint256 _itemLimit
-  ) external noBlacklist onlyItemAdmin(_itemID) returns (bool) {
+  ) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     MarketItem memory oldItem = marketItems[_itemID - 1];
     if (!oldItem.routeMutable || _routeID == 0) {
       // If the payment route is not mutable, then set the input equal to the old routeID
@@ -607,7 +626,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @param _itemID Marketplace ID of item for sale
    * @return forSale True = item reactivated, false = item deactivated
    */
-  function toggleForSale(uint256 _itemID) external noBlacklist onlyItemAdmin(_itemID) returns (bool forSale) {
+  function toggleForSale(uint256 _itemID) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool forSale) {
     // Create singleton array for _itemID
     uint256[] memory itemID = new uint256[](1);
     itemID[0] = _itemID;
@@ -625,6 +644,35 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Event added
     emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
     return marketItems[_itemID - 1].forSale;
+  }
+
+  /**
+   * @notice Deletes a MarketItem
+   * @dev Does not remove itemID or the entry in marketItems, just sets properties to default
+   * and removes tokenMap mappings. This frees up the tokenID to be used in a new MarketItem.
+   */
+  function deleteMarketItem(uint256 _itemID) external noBlacklist itemExists(_itemID) returns (bool) {
+    MarketItem memory item = marketItems[_itemID - 1];
+    // Caller must either be item's creator or a Pazari admin, no itemAdmins allowed
+    require(
+      _msgSender() == itemCreator[_itemID] ||
+      isAdmin[_msgSender()],
+      "Only item creators and Pazari admins can delete items");
+    // Require item has been completely unstocked and deactivated
+    require(!item.forSale, "Deactivate item before deleting");
+    require(item.amount == 0, "Pull all stock before deleting");
+
+    // Erase tokenMap mapping, frees up tokenID to be used in a new MarketItem
+    delete tokenMap[item.tokenContract][item.tokenID];
+    // Set all properties to defaults by deletion
+    delete marketItems[_itemID - 1];
+    // Erase itemCreator mapping
+    delete itemCreator[_itemID];
+    // Erase sellersMarketItems entry
+
+    // RETURN
+    emit MarketItemDeleted(_itemID, _msgSender(), block.timestamp);
+    return true;
   }
 
   /**
