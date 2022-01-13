@@ -600,6 +600,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @param _itemID Marketplace ID of item for sale
    */
   function toggleForSale(uint256 _itemID) external noBlacklist onlyItemAdmin(_itemID) {
+    // Create singleton array for _itemID
     uint256[] memory itemID = new uint256[](1);
     itemID[0] = _itemID;
     MarketItem[] memory item = getMarketItems(itemID);
@@ -608,6 +609,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
       itemsSoldOut.increment();
       marketItems[_itemID - 1].forSale = false;
     } else if (!item[0].forSale) {
+      require(item[0].amount > 0, "Restock item before reactivating");
       itemsSoldOut.decrement();
       marketItems[_itemID - 1].forSale = true;
     }
