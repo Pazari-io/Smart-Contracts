@@ -149,7 +149,7 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
 }
 
 
-interface AccessControlPTMVP {
+interface IAccessControlPTMVP {
 
   // Accesses isAdmin mapping
   function isAdmin(address _adminAddress) external view returns (bool);
