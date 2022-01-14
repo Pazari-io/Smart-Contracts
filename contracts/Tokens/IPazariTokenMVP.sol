@@ -146,7 +146,7 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID) external view returns (uint256);
 }
 
-interface IAccessControlPTMVP {
+interface IAccessControlPTMVP 
   // Accesses isAdmin mapping
   function isAdmin(address _adminAddress) external view returns (bool);
 
