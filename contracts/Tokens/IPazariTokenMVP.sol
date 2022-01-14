@@ -11,7 +11,6 @@ pragma solidity ^0.8.0;
 import "../Dependencies/IERC1155MetadataURI.sol";
 
 interface IPazariTokenMVP is IERC1155MetadataURI {
-
   // Fires when a new token is created through createNewToken()
   event TokenCreated(string URI, uint256 indexed tokenID, uint256 amount);
 
@@ -127,7 +126,7 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   function ownsToken(uint256[] memory _tokenIDs, address _owner) external view returns (bool[] memory);
 
   /**
-   * @notice Returns TokenProps struct 
+   * @notice Returns TokenProps struct
    *
    * @dev Only available to token contract admins
    */
@@ -145,12 +144,9 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
    * @dev All this does is returns the location of an address inside a tokenID's tokenHolders
    */
   function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID) external view returns (uint256);
-
 }
 
-
-interface IAccessControlPTMVP {
-
+interface IAccessControlPTMVP 
   // Accesses isAdmin mapping
   function isAdmin(address _adminAddress) external view returns (bool);
 
@@ -165,6 +161,4 @@ interface IAccessControlPTMVP {
 
   // Removes an address from isAdmin mapping
   function removeAdmin(address _oldAddress) external returns (bool);
-
 }
-

@@ -9,10 +9,9 @@ import "../Dependencies/IERC20.sol";
 import "../Dependencies/ERC1155Holder.sol";
 
 contract AccessControlPMVP {
-
   // All "owners" who can access restricted PazariToken functions
   // This is defined inside functions
-  address[] internal admins; 
+  address[] internal admins;
 
   // Maps admin addresses to bool
   mapping(address => bool) public isAdmin;
@@ -22,7 +21,7 @@ contract AccessControlPMVP {
   event AdminRemoved(address oldAdmin, address adminAuthorized, string reason, uint256 timestamp);
 
   constructor(address[] memory _adminAddresses) {
-    for(uint i = 0; i < _adminAddresses.length; i++){
+    for (uint256 i = 0; i < _adminAddresses.length; i++) {
       isAdmin[_adminAddresses[i]] = true;
     }
   }
@@ -35,23 +34,22 @@ contract AccessControlPMVP {
   modifier onlyAdmin() {
     require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari-owned addresses");
     _;
-  } 
-  
+  }
+
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
    * for everything else. See PaymentRouter for more details.
    */
   function _msgSender() public view returns (address) {
-    if(tx.origin != msg.sender && isAdmin[msg.sender]){
+    if (tx.origin != msg.sender && isAdmin[msg.sender]) {
       return tx.origin;
-    }
-    else return msg.sender;
+    } else return msg.sender;
   }
-  
+
   // Adds an address to isAdmin mapping
   // Requires both tx.origin and msg.sender be admins
   function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
-    require(!isAdmin[_newAddress], "Address is already an admin");    
+    require(!isAdmin[_newAddress], "Address is already an admin");
 
     isAdmin[_newAddress] = true;
 
@@ -62,7 +60,7 @@ contract AccessControlPMVP {
   // Removes an address from isAdmin mapping
   // Requires both tx.origin and msg.sender be admins
   function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
-    require(isAdmin[_oldAddress], "Address is not an admin");    
+    require(isAdmin[_oldAddress], "Address is not an admin");
 
     isAdmin[_oldAddress] = false;
 
@@ -70,7 +68,6 @@ contract AccessControlPMVP {
     return true;
   }
 }
-
 
 contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   // Declare all external contracts
@@ -91,20 +88,20 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
   // Fires when a new user joins and lists an item
   event NewUserCreated(
-    address userAddress, 
-    bytes32 routeID, 
-    address tokenContractAddress, 
-    uint256 itemID, 
+    address userAddress,
+    bytes32 routeID,
+    address tokenContractAddress,
+    uint256 itemID,
     uint256 timestamp
   );
 
   // Fires after a token contract is cloned
   event ContractCloned(
-    uint contractID, 
+    uint256 contractID,
     uint16 indexed contractType,
     address indexed creatorAddress,
-    address indexed factoryAddress, 
-    address cloneAddress, 
+    address indexed factoryAddress,
+    address cloneAddress,
     uint256 timestamp
   );
 
@@ -173,15 +170,15 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
    * @param _amount Amount of tokens to be minted and listed
    * @param _price Price in USD for each token.
    */
-  function createUserProfile (
+  function createUserProfile(
     string memory _URI,
     uint256 _amount,
     uint256 _price
   ) external returns (UserProfile memory) {
     // Require that admins completed initialization
     require(
-      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) && 
-      IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)), 
+      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) &&
+        IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)),
       "Admins must finish initialization"
     );
     // Store return value of _msgSender()
@@ -209,11 +206,11 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     deployedContracts.push(tokenContractAddress);
     // Emits basic information about deployed contract
     emit ContractCloned(
-      deployedContracts.length, 
+      deployedContracts.length,
       0,
       msgSender,
-      address(iFactoryPazariTokenMVP), 
-      tokenContractAddress, 
+      address(iFactoryPazariTokenMVP),
+      tokenContractAddress,
       block.timestamp
     );
 
@@ -241,14 +238,8 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     userProfile[msgSender].itemIDs.push(itemID);
 
     // Emits all UserProfile struct properties
-    emit NewUserCreated(   
-      msgSender, 
-      routeID, 
-      tokenContractAddress, 
-      itemID, 
-      block.timestamp
-    );
-    
+    emit NewUserCreated(msgSender, routeID, tokenContractAddress, itemID, block.timestamp);
+
     return userProfile[msgSender];
   }
 
@@ -268,8 +259,8 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   ) external returns (uint256, uint256) {
     // Require that admins completed initialization
     require(
-      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) && 
-      IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)), 
+      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) &&
+        IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)),
       "Admins must finish initialization"
     );
     address msgSender = _msgSender();
@@ -298,7 +289,7 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
       address(iERC20),
       userProfile[msgSender].routeID
     );
-    
+
     // PazariMVP \\
     itemIDs.push(itemID);
     userProfile[msgSender].itemIDs.push(itemID);

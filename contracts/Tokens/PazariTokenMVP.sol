@@ -60,7 +60,12 @@ contract PazariTokenMVP is Pazari1155 {
    * @notice Returns tokenHolderIndex value for an address and a tokenID
    * @dev All this does is returns the location of an address inside a tokenID's tokenHolders
    */
-  function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID) public view onlyAdmin returns (uint256) {
+  function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID)
+    public
+    view
+    onlyAdmin
+    returns (uint256)
+  {
     return tokenHolderIndex[_tokenHolder][_tokenID];
   }
 
@@ -108,17 +113,10 @@ contract PazariTokenMVP is Pazari1155 {
 
     tokenID = tokenProps.length;
     // Create new TokenProps and push to tokenProps array
-    TokenProps memory newToken = TokenProps(
-      tokenProps.length,
-      _newURI,
-      _amount,
-      _supplyCap,
-      _isMintable
-    );
+    TokenProps memory newToken = TokenProps(tokenProps.length, _newURI, _amount, _supplyCap, _isMintable);
     tokenProps.push(newToken);
     // Grab tokenID from newToken's struct
     tokenID = newToken.tokenID;
-
 
     // Mint tokens to _msgSender()
     require(_mint(_msgSender(), tokenID, _amount, ""), "Minting failed");
@@ -211,7 +209,8 @@ contract PazariTokenMVP is Pazari1155 {
       // Iterate through recipients, transfer tokenID if recipient != address(0)
       // See burn() for why some addresses in tokenHolders may be address(0)
       for (j = 0; j < _recipients.length; j++) {
-        if (_recipients[j] == address(0)) continue; // If found, then skip address(0)
+        if (_recipients[j] == address(0)) continue;
+        // If found, then skip address(0)
         else _safeTransferFrom(_msgSender(), _recipients[j], _tokenIDs[i], _amounts[i], "");
       }
     }
@@ -230,7 +229,7 @@ contract PazariTokenMVP is Pazari1155 {
    * is permitted freely. This is like a store selling an item to someone. What is also
    * implied by this condition is that it is acceptable for recipients to transfer their
    * PazariTokens back to the sender/admin, which would happen during a refund. What is
-   * also implied is that it is not acceptable for recipients to transfer their PazariTokens 
+   * also implied is that it is not acceptable for recipients to transfer their PazariTokens
    * to anyone else. These tokens are attached to downloadable content, and should NOT be
    * transferrable to non-admin addresses to protect the content.
    */
@@ -242,7 +241,7 @@ contract PazariTokenMVP is Pazari1155 {
     bytes memory data
   ) external virtual override {
     // If recipient is not admin, then sender needs to be admin
-    if(!isAdmin[to]){
+    if (!isAdmin[to]) {
       require(isAdmin[from], "PazariToken: Only admins may send PazariTokens to non-admins");
     }
     _safeTransferFrom(from, to, id, amount, data);

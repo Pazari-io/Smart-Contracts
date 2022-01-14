@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IPazariMVP {
-
   // Fires when a new token is listed for sale
   event NewTokenListed(
     address indexed itemOwner,
@@ -15,20 +14,20 @@ interface IPazariMVP {
 
   // Fires when a new user joins and lists an item
   event NewUserCreated(
-    address userAddress, 
-    bytes32 routeID, 
-    address tokenContractAddress, 
-    uint256 itemID, 
+    address userAddress,
+    bytes32 routeID,
+    address tokenContractAddress,
+    uint256 itemID,
     uint256 timestamp
   );
 
   // Fires after a token contract is cloned
   event ContractCloned(
-    uint contractID, 
+    uint256 contractID,
     uint16 indexed contractType,
     address indexed creatorAddress,
-    address indexed factoryAddress, 
-    address cloneAddress, 
+    address indexed factoryAddress,
+    address cloneAddress,
     uint256 timestamp
   );
 
@@ -53,7 +52,7 @@ interface IPazariMVP {
     bool routeMutable;
     bool forSale;
     uint256 itemLimit;
-  }  
+  }
 
   /**
    * @notice Auto-generates a new payment route, clones a token contract, mints a token, and lists
@@ -108,11 +107,9 @@ interface IPazariMVP {
    * one MarketItem struct.
    */
   function getMarketItem(uint256 _itemID) external view returns (MarketItem memory);
-
 }
 
-interface AccessControlPMVP {
-
+interface IAccessControlPMVP {
   function isAdmin(address _userAddress) external view returns (bool);
 
   function _msgSender() external view returns (address);
