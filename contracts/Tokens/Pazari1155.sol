@@ -13,16 +13,15 @@ import "../Dependencies/ERC165.sol";
 import "../Marketplace/Marketplace.sol";
 
 contract AccessControlPTMVP {
-
   // Maps admin addresses to bool
   // These are NOT Pazari developer admins, but can include Pazari helpers
   mapping(address => bool) public isAdmin;
 
   // The address that cloned this contract, never loses admin access
-  address internal immutable originalOwner;  
+  address internal immutable originalOwner;
 
   constructor(address[] memory _adminAddresses) {
-    for(uint i = 0; i < _adminAddresses.length; i++){
+    for (uint256 i = 0; i < _adminAddresses.length; i++) {
       isAdmin[_adminAddresses[i]] = true;
     }
     originalOwner = _msgSender();
@@ -32,7 +31,7 @@ contract AccessControlPTMVP {
     require(isAdmin[_msgSender()], "Caller is not admin");
     _;
   }
-  
+
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
    * for everything else. This only permits Pazari helper contracts to use tx.origin,
@@ -44,16 +43,15 @@ contract AccessControlPTMVP {
    * each other's _msgSender() for if they need to use the same AccessControl storage.
    */
   function _msgSender() public view returns (address) {
-    if(tx.origin != msg.sender && isAdmin[msg.sender]){
+    if (tx.origin != msg.sender && isAdmin[msg.sender]) {
       return tx.origin;
-    }
-    else return msg.sender;
+    } else return msg.sender;
   }
-  
+
   // Adds an address to isAdmin mapping
   // Requires both tx.origin and msg.sender be admins
   function addAdmin(address _newAddress) external returns (bool) {
-    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Caller is not admin");    
+    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Caller is not admin");
     require(!isAdmin[_newAddress], "Address is already an admin");
     isAdmin[_newAddress] = true;
     return true;
@@ -69,7 +67,6 @@ contract AccessControlPTMVP {
     return true;
   }
 }
-
 
 abstract contract Pazari1155 is AccessControlPTMVP, ERC165, IERC1155MetadataURI {
   using Address for address;
@@ -211,9 +208,10 @@ abstract contract Pazari1155 is AccessControlPTMVP, ERC165, IERC1155MetadataURI 
     bool[] memory hasTokens = ownsToken(tokenIDs, recipient);
     // Iterate through array
     for (uint256 i = 0; i < tokenIDs.length; i++) {
-      if (hasTokens[i] == false) { // Run logic if recipient does not own a token
+      if (hasTokens[i] == false) {
+        // Run logic if recipient does not own a token
         // If recipient was a tokenHolder before, then put them back in tokenHolders
-        if(tokenHolderIndex[recipient][tokenIDs[i]] != 0){
+        if (tokenHolderIndex[recipient][tokenIDs[i]] != 0) {
           tokenHolders[tokenIDs[i]][tokenHolderIndex[recipient][tokenIDs[i]]] = recipient;
         }
         // if not, then push recipient's address to tokenHolders
@@ -313,7 +311,7 @@ abstract contract Pazari1155 is AccessControlPTMVP, ERC165, IERC1155MetadataURI 
     // If caller is a contract without isAdmin, then contract's address is checked instead
     require(isAdmin[_msgSender()], "PazariToken: Caller is not admin");
     // If recipient is not admin, then sender needs to be admin
-    if(!isAdmin[to]){
+    if (!isAdmin[to]) {
       require(isAdmin[from], "PazariToken: Only admins may transfer");
     }
 

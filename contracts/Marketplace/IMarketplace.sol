@@ -9,7 +9,6 @@
 pragma solidity ^0.8.0;
 
 interface IMarketplace {
-  
   //***EVENTS***\\
 
   // Fires when a MarketItem is sold;
@@ -137,7 +136,7 @@ interface IMarketplace {
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
    * @return bool Success bool
-   * 
+   *
    * @dev Emits StockPulled event
    */
   function pullStock(uint256 _itemID, uint256 _amount) external returns (bool);
@@ -231,7 +230,10 @@ interface IMarketplace {
    * @dev This function can be used to check for tokens across multiple contracts, and is better than the
    * ownsTokens() function in the PazariTokenMVP contract. This is the only function we will need to call.
    */
-  function ownsTokens(address _owner, uint256[] memory _itemIDs) external view returns (bool[] memory hasToken);
+  function ownsTokens(address _owner, uint256[] memory _itemIDs)
+    external
+    view
+    returns (bool[] memory hasToken);
 }
 
 /**
@@ -239,23 +241,34 @@ interface IMarketplace {
  * @dev Not needed for MVP, but they're here if needed
  */
 interface IAccessControlMP {
-
   // Fires when admins are added or removed
   event AdminAdded(address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
 
   // Fires when item admins are added or removed
-  event ItemAdminAdded(uint256 itemID, address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
-  event ItemAdminRemoved(uint256 itemID, address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
+  event ItemAdminAdded(
+    uint256 itemID,
+    address newAdmin,
+    address adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
+  event ItemAdminRemoved(
+    uint256 itemID,
+    address oldAdmin,
+    address adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
   // Fires when an address is blacklisted/whitelisted from the Pazari Marketplace
   event AddressBlacklisted(address blacklistedAddress, address adminAddress, string memo, uint256 timestamp);
   event AddressWhitelisted(address whitelistedAddress, address adminAddress, string memo, uint256 timestamp);
-  
+
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
    * for everything else. See IPaymentRouter for more details.
-    */
+   */
   function _msgSender() external view returns (address);
 
   // Accesses isAdmin mapping
@@ -275,17 +288,24 @@ interface IAccessControlMP {
 
   // Removes an address from isAdmin mapping
   function removeAdmin(address _oldAddress, string memory _memo) external returns (bool);
-  
+
   // Adds an address to isItemAdmin mapping
-  function addItemAdmin(uint256 _itemID, address _newAddress, string memory _memo) external returns (bool);
+  function addItemAdmin(
+    uint256 _itemID,
+    address _newAddress,
+    string memory _memo
+  ) external returns (bool);
 
   // Removes an address from isItemAdmin mapping
-  function removeItemAdmin(uint256 _itemID, address _oldAddress, string memory _memo) external returns (bool);
+  function removeItemAdmin(
+    uint256 _itemID,
+    address _oldAddress,
+    string memory _memo
+  ) external returns (bool);
 
   /**
    * @notice Toggles isBlacklisted for an address. Can only be called by Pazari
    * Marketplace admins.
    */
-  function toggleBlacklist(address _listedAddress, string memory _memo) external returns(bool);
-
+  function toggleBlacklist(address _listedAddress, string memory _memo) external returns (bool);
 }

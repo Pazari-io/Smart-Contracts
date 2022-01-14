@@ -12,7 +12,6 @@ import "../Dependencies/IERC20.sol";
  * to remove a routeCreator mapping once created.
  */
 contract AccessControlPR {
-
   // Maps Pazari-owned addresses to a bool
   mapping(address => bool) public isAdmin;
   // Maps each routeID's admin addresses to a bool
@@ -25,11 +24,23 @@ contract AccessControlPR {
   event AdminRemoved(address removedAdmin, address callerAdmin, string memo, uint256 timestamp);
 
   // Fires when route admins are added/removed, uses _msgSender() for callerAdmin
-  event RouteAdminAdded(bytes32 routeID, address addedAdmin, address callerAdmin, string memo, uint256 timestamp);
-  event RouteAdminRemoved(bytes32 routeID, address removedAdmin, address callerAdmin, string memo, uint256 timestamp);
+  event RouteAdminAdded(
+    bytes32 routeID,
+    address addedAdmin,
+    address callerAdmin,
+    string memo,
+    uint256 timestamp
+  );
+  event RouteAdminRemoved(
+    bytes32 routeID,
+    address removedAdmin,
+    address callerAdmin,
+    string memo,
+    uint256 timestamp
+  );
 
   constructor(address[] memory _adminAddresses) {
-    for(uint i = 0; i < _adminAddresses.length; i++){
+    for (uint256 i = 0; i < _adminAddresses.length; i++) {
       isAdmin[_adminAddresses[i]] = true;
     }
   }
@@ -51,7 +62,7 @@ contract AccessControlPR {
    */
   modifier onlyPazariContract() {
     // Permit developers to directly call via private wallet
-    if(isAdmin[msg.sender] && isAdmin[tx.origin]){
+    if (isAdmin[msg.sender] && isAdmin[tx.origin]) {
       _;
     }
     // Everyone else must use a Pazari admin contract, no private wallets
@@ -69,13 +80,11 @@ contract AccessControlPR {
    */
   modifier onlyRouteAdmin(bytes32 _routeID) {
     require(
-      routeCreator[_routeID] == _msgSender() ||
-      isRouteAdmin[_routeID][_msgSender()] ||
-      isAdmin[_msgSender()], 
+      routeCreator[_routeID] == _msgSender() || isRouteAdmin[_routeID][_msgSender()] || isAdmin[_msgSender()],
       "Caller is neither admin nor route creator"
     );
     _;
-  }  
+  }
 
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
@@ -84,31 +93,34 @@ contract AccessControlPR {
    * essential for accurately recording owner addresses while restricting access to
    * PaymentRouter functions.
    * @dev Caution: This design is vulnerable to phishing attacks if a helper contract that
-   * has isAdmin does NOT run the same _msgSender() logic. 
+   * has isAdmin does NOT run the same _msgSender() logic.
    */
   function _msgSender() public view returns (address) {
-    if(tx.origin != msg.sender && isAdmin[msg.sender]){
+    if (tx.origin != msg.sender && isAdmin[msg.sender]) {
       return tx.origin;
-    }
-    else return msg.sender;
+    } else return msg.sender;
   }
-  
+
   // Adds an address to isAdmin mapping
   function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
     require(!isAdmin[_newAddress], "Address is already an admin");
-    
+
     isAdmin[_newAddress] = true;
-    
+
     emit AdminAdded(_newAddress, tx.origin, _memo, block.timestamp);
     return true;
   }
 
   // Adds an address to isRouteAdmin mapping for a payment route
-  function addRouteAdmin(bytes32 _routeID, address _newAddress, string memory _memo) external onlyRouteAdmin(_routeID) returns (bool){
+  function addRouteAdmin(
+    bytes32 _routeID,
+    address _newAddress,
+    string memory _memo
+  ) external onlyRouteAdmin(_routeID) returns (bool) {
     require(!isRouteAdmin[_routeID][_newAddress], "Address is already a route admin");
-    
+
     isRouteAdmin[_routeID][_newAddress] = true;
-    
+
     emit RouteAdminAdded(_routeID, _newAddress, _msgSender(), _memo, block.timestamp);
     return true;
   }
@@ -116,27 +128,29 @@ contract AccessControlPR {
   // Removes an address from isAdmin mapping
   function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
     require(isAdmin[_oldAddress], "Address is not an admin");
-    
+
     isAdmin[_oldAddress] = false;
-    
+
     emit AdminRemoved(_oldAddress, tx.origin, _memo, block.timestamp);
     return true;
   }
 
   // Removes an address from isRouteAdmin mapping for a payment route
-  function removeRouteAdmin(bytes32 _routeID, address _oldAddress, string memory _memo) external onlyRouteAdmin(_routeID) returns (bool) {
+  function removeRouteAdmin(
+    bytes32 _routeID,
+    address _oldAddress,
+    string memory _memo
+  ) external onlyRouteAdmin(_routeID) returns (bool) {
     require(isRouteAdmin[_routeID][_oldAddress], "Address is not a route admin");
-    
+
     isRouteAdmin[_routeID][_oldAddress] = false;
-    
+
     emit RouteAdminRemoved(_routeID, _oldAddress, _msgSender(), _memo, block.timestamp);
     return true;
-  }  
+  }
 }
 
-
 contract PaymentRouter is AccessControlPR {
-  
   //***EVENTS***\\
   // Fires when a new payment route is created
   event RouteCreated(address indexed creator, bytes32 routeID, address[] recipients, uint16[] commissions);
@@ -181,10 +195,21 @@ contract PaymentRouter is AccessControlPR {
   event TreasurySet(address oldAddress, address newAddress, address adminCaller, uint256 timestamp);
 
   // Fires when the pazariTreasury address is altered
-  event TreasuryChanged(address oldAddress, address newAddress, address indexed adminAuthorized, string memo, uint256 timestamp);
+  event TreasuryChanged(
+    address oldAddress,
+    address newAddress,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
   // Fires when recipient max values are altered
-  event MaxRecipientsChanged(uint8 newMaxRecipients, address indexed adminAuthorized, string memo, uint256 timestamp);
+  event MaxRecipientsChanged(
+    uint8 newMaxRecipients,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
   //***MAPPINGS***\\
   // Maps available payment token balance per recipient for pull function
@@ -233,7 +258,7 @@ contract PaymentRouter is AccessControlPR {
     address[] memory _routerAdmins,
     uint16 _minTax,
     uint16 _maxTax
-  ) AccessControlPR(_routerAdmins){
+  ) AccessControlPR(_routerAdmins) {
     require(_minTax <= _maxTax, "minTax must be <= maxTax");
     require(_routerAdmins.length > 0, "Must provide at least one developer address");
     require(_pazariTreasury != address(0), "Must provide a valid address for treasury");
@@ -330,16 +355,14 @@ contract PaymentRouter is AccessControlPR {
     address _tokenAddress,
     address _senderAddress,
     uint256 _amount
-  ) external onlyPazariContract() checkRouteTax(_routeID) returns (bool) {
+  ) external onlyPazariContract checkRouteTax(_routeID) returns (bool) {
     require(paymentRouteID[_routeID].isActive, "Error: Route inactive");
 
     // Store PaymentRoute struct into local variable
     PaymentRoute memory route = getPaymentRoute(_routeID);
     // Transfer full _amount from sender to contract
-    require(IERC20(_tokenAddress).transferFrom(
-      _senderAddress, 
-      address(this), 
-      _amount), 
+    require(
+      IERC20(_tokenAddress).transferFrom(_senderAddress, address(this), _amount),
       "ERC20 transferFrom failed"
     );
 
@@ -402,29 +425,23 @@ contract PaymentRouter is AccessControlPR {
     // We + 1 to tokenBalanceToCollect as part of a gas-saving design
     for (uint256 i = 0; i < route.commissions.length; i++) {
       payment = ((taxedAmount * route.commissions[i]) / 10000);
-      
+
       // If balance to collect is 0, then it needs to be initialized to 1
       if (tokenBalanceToCollect[route.recipients[i]][_tokenAddress] == 0) {
         tokenBalanceToCollect[route.recipients[i]][_tokenAddress] = 1;
       }
-      
+
       tokenBalanceToCollect[route.recipients[i]][_tokenAddress] += payment;
     }
 
     // Transfer tokens from senderAddress to this contract
-    require(IERC20(_tokenAddress).transferFrom(
-      _senderAddress, 
-      address(this), 
-      _amount), 
-      "ERC20 transferFrom failed"  
+    require(
+      IERC20(_tokenAddress).transferFrom(_senderAddress, address(this), _amount),
+      "ERC20 transferFrom failed"
     );
 
     // Transfer treasury's commission from this contract to pazariTreasury
-    require(IERC20(_tokenAddress).transfer(
-      pazariTreasury, 
-      tax),
-      "ERC20 transfer failed"  
-    );
+    require(IERC20(_tokenAddress).transfer(pazariTreasury, tax), "ERC20 transfer failed");
 
     // Fire event alerting recipients they have tokens to collect
     emit TokensHeld(_routeID, _tokenAddress, _amount);
@@ -444,7 +461,7 @@ contract PaymentRouter is AccessControlPR {
   function pullTokens(address _tokenAddress) external returns (bool) {
     // Initialized accounts reset back to 1 instead of 0
     require(tokenBalanceToCollect[_msgSender()][_tokenAddress] > 1, "No payment to collect");
-    
+
     // Store recipient's balance - 1 as their payment
     uint256 payment = tokenBalanceToCollect[_msgSender()][_tokenAddress] - 1;
 
@@ -537,7 +554,7 @@ contract PaymentRouter is AccessControlPR {
   }
 
   /**
-   * @notice Returns a list of the caller's created payment routes 
+   * @notice Returns a list of the caller's created payment routes
    * @notice restricted to route's original creator, route admins, or Pazari admins
    *
    * @dev Routes are stored in arrays mapped to the addresses that created them.
@@ -550,9 +567,8 @@ contract PaymentRouter is AccessControlPR {
     // - A route admin
     // - A Pazari admin
     require(
-      routeCreator[routeID] == _msgSender() ||
-      isRouteAdmin[routeID][_msgSender()] ||
-      (isAdmin[_msgSender()]), "Unauthorized: Only creator, route admins, or Pazari admins permitted"
+      routeCreator[routeID] == _msgSender() || isRouteAdmin[routeID][_msgSender()] || (isAdmin[_msgSender()]),
+      "Unauthorized: Only creator, route admins, or Pazari admins permitted"
     );
     return routeIDs;
   }
@@ -615,7 +631,15 @@ contract PaymentRouter is AccessControlPR {
    *
    * @dev Emits TreasurySet event
    */
-  function setTreasuryAddress(address _newTreasuryAddress, string memory _memo) external onlyAdmin returns (bool success, address oldAddress, address newAddress) {
+  function setTreasuryAddress(address _newTreasuryAddress, string memory _memo)
+    external
+    onlyAdmin
+    returns (
+      bool success,
+      address oldAddress,
+      address newAddress
+    )
+  {
     // Store return values
     oldAddress = pazariTreasury;
     newAddress = _newTreasuryAddress;
@@ -632,7 +656,7 @@ contract PaymentRouter is AccessControlPR {
    * @param _newMax Maximum recipient size for new PaymentRoutes
    * @return (bool, uint8) Success bool, new value for maxRecipients
    */
-  function setMaxRecipients(uint8 _newMax, string memory _memo) external onlyAdmin returns (bool, uint8){
+  function setMaxRecipients(uint8 _newMax, string memory _memo) external onlyAdmin returns (bool, uint8) {
     maxRecipients = _newMax;
 
     emit MaxRecipientsChanged(maxRecipients, _msgSender(), _memo, block.timestamp);
@@ -650,24 +674,26 @@ contract PaymentRouter is AccessControlPR {
 
   /**
    * @notice Returns the caller's ERC20 balance that is available to withdraw
-   * 
+   *
    * @dev The mapping is always +1 to the actual balance, and this function compensates for that.
    * @dev This function hides account balances from public view, only account owners and admins may call it.
    */
-  function getPaymentBalance(address _recipientAddress, address _tokenAddress) public view returns(uint256 balance){
+  function getPaymentBalance(address _recipientAddress, address _tokenAddress)
+    public
+    view
+    returns (uint256 balance)
+  {
     require(_msgSender() == _recipientAddress || isAdmin[_msgSender()], "Caller not owner of account");
     // Logic for returning 0 when account is empty
-    if(tokenBalanceToCollect[_recipientAddress][_tokenAddress] <= 1){
+    if (tokenBalanceToCollect[_recipientAddress][_tokenAddress] <= 1) {
       return 0;
-    }
-    else balance = tokenBalanceToCollect[_recipientAddress][_tokenAddress] - 1;
+    } else balance = tokenBalanceToCollect[_recipientAddress][_tokenAddress] - 1;
   }
 
   /**
    * @notice Returns the minTax and maxTax values that PaymentRoutes must stay within
    */
-  function getTaxBounds() public view returns (uint min, uint max){
+  function getTaxBounds() public view returns (uint256 min, uint256 max) {
     return (minTax, maxTax);
   }
-
 }
