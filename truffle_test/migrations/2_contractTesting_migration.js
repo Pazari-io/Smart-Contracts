@@ -156,7 +156,7 @@ module.exports = async function (deployer, network, accounts) {
 
   //PUT ITEM FOR SALE
   console.log("TESTING: Marketplace.createMarketItem()");
-  itemID = await market.getNextItemID(); // Use other methods to obtain itemID for front-end!
+  itemID = 1; // Use other methods to obtain itemID for front-end!
   console.log("Running createMarketItem() for itemID " + itemID + ":");
   await market.createMarketItem(
     pazariToken.address,
@@ -174,9 +174,9 @@ module.exports = async function (deployer, network, accounts) {
   );
   console.log("createMarketItem() success");
   console.log(
-    "itemID " + (await itemID) + " has " + (await pazariToken.balanceOf(market.address, tokenID)) + " units available",
+    "itemID " + itemID + " has " + (await pazariToken.balanceOf(market.address, tokenID)) + " units available",
   );
-  itemID2 = await market.getNextItemID();
+  itemID2 = 2;
   console.log("Running createMarketItem() for itemID " + itemID2 + ":");
   await market.createMarketItem(
     pazariToken.address,
@@ -196,7 +196,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log(
     "itemID " + itemID2 + " has " + (await pazariToken.balanceOf(market.address, tokenID2)) + " units available",
   );
-  itemID3 = await market.getNextItemID(); // Use other methods to obtain itemID for front-end!
+  itemID3 = 3; // Use other methods to obtain itemID for front-end!
   console.log("Running createMarketItem() for itemID " + itemID3 + ":");
   await market.createMarketItem(
     pazariToken.address,
@@ -288,11 +288,9 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Pazari Treasury: $" + web3.utils.fromWei(await stablecoin.balanceOf(accounts[4])));
 
   console.log("TESTING: Marketplace.ownsToken():");
-  console.log("Checking if buyer owns tokenID 1: " + (await market.ownsToken(buyer, pazariToken.address, tokenID)));
-  console.log("Checking if seller owns tokenID 2: " + (await market.ownsToken(seller, pazariToken.address, tokenID2)));
-  console.log(
-    "Checking if accounts[8] owns tokenID 2: " + (await market.ownsToken(accounts[8], pazariToken.address, tokenID2)),
-  );
+  console.log("Checking if buyer owns tokenID 1: " + (await market.ownsTokens(buyer, [1])));
+  console.log("Checking if seller owns tokenID 2: " + (await market.ownsTokens(seller, [2])));
+  console.log("Checking if accounts[8] owns tokenID 2: " + (await market.ownsTokens(accounts[8], [3])));
   /*
    * To test:
    * - Multiple sellers and buyers

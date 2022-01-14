@@ -4,6 +4,9 @@
  * Inherits from IERC1155MetadataURI, therefore all IERC1155 function
  * calls will work on a Pazari token. The IPazariTokenMVP interface
  * accesses the Pazari-specific functions of a Pazari token.
+ *
+ * Version 0.1.2:
+ * - Added tokenID as a return value for createNewToken()
  */
 
 // SPDX-License-Identifier: MIT
@@ -12,6 +15,12 @@ pragma solidity ^0.8.0;
 import "../Dependencies/IERC1155MetadataURI.sol";
 
 interface IPazariTokenMVP is IERC1155MetadataURI {
+  // Fires when a recipient receives a tokenID from the airdropTokens() function
+  event TokenAirdropped(uint256 indexed tokenID, uint256 amount, address indexed recipient);
+
+  // Fires when a new token is created through createNewToken()
+  event TokenCreated(string URI, uint256 indexed tokenID, uint256 amount);
+
   /**
    * @dev Struct to track token properties.
    */
@@ -32,57 +41,33 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   /**
    * @dev Returns an array of all holders of a _tokenID
    */
-  function tokenOwners(uint256 _tokenID) external view returns (address[] memory);
+  function tokenHolders(uint256 _tokenID) external view returns (address[] memory);
 
   /**
-   * @dev Returns an _owner's index value in a tokenOwners[_tokenID] array.
+   * @notice Returns an address's index value in a token's tokenHolders[] array property.
    *
-   * note Use this to know where inside a tokenOwners[_tokenID] array an _owner is.
+   * @dev Not really needed for front-end. This is just a mapping that tells you where an address
+   * is inside a token's tokenHolders[] array. If it returns 0, then that address is not a holder,
+   * since tokenHolders[0] == address(0) for all tokens.
    */
-  function tokenOwnerIndex(address _owner, uint256 _tokenID) external view returns (uint256 index);
+  function tokenHolderIndex(address _owner, uint256 _tokenID) external view returns (uint256 index);
 
   /**
-   * @dev Checks if _owner(s) own _tokenID(s). Three overloaded functions can take in any
-   * number of tokenIDs and owner addresses that addresses three cases:
+   * @notice Performs an airdrop for multiple tokens to many recipients
    *
-   * Case 1: Caller needs to know if _owner holds _tokenID
-   * Case 2: Caller needs to know if _owner holds any _tokenIDs
-   * Case 3: Caller needs to know which _owners hold which _tokenIDs
+   * @dev NOT USED FOR MVP
    *
-   * note The only reason to consider using these functions instead of balanceOf() is so the
-   * front-end can receive a boolean as a response and not need to write additional logic
-   * to compare numbers and make decisions. Just call ownsToken() and you'll know right away
-   * if the address owns that token or not. Use these for token ownership gateways. If
-   * calling balanceOf() from the front-end isn't too inconvenient, then we can remove these
-   * getter functions entirely, or move them to an external utility contract.
+   * @param _tokenIDs Array of all tokenIDs being airdropped
+   * @param _amounts Array of all amounts of each tokenID to drop to each recipient
+   * @param _recipients Array of all recipients for the airdrop
+   *
+   * @dev Emits TokenAirdropped event
    */
-  //function ownsToken(uint256 _tokenID, address _owner) external view returns (bool);
-
-  function ownsToken(uint256[] memory _tokenIDs, address _owner)
-    external
-    view
-    returns (bool[] memory hasToken);
-
-  //function ownsToken(uint256[] memory _tokenIDs, address[] memory _owners) external view returns (bool[][] memory hasTokens);
-
-  /**
-   * Performs an airdrop for three different cases:
-   *
-   * Case 1: An arbitrary list of _recipients will be transferred _amount of _tokenID
-   * Case 2: An arbitrary list of _recipients will be transferred _amount of each _tokenIDs[i]
-   * Case 3: _amount of _tokenToDrop will be transferred to all _recipients who own _tokenToCheck
-   *
-   * I chose to use Case 2, since it seems to be the most flexible, and I only have room for 1 function
-   */
-  //function airdropTokens(uint256 _tokenID, uint256 _amount, address[] memory _recipients) external returns (bool);
-
   function airdropTokens(
     uint256[] memory _tokenIDs,
     uint256[] memory _amounts,
     address[] memory _recipients
   ) external returns (bool);
-
-  //function airdropTokens(uint256 _tokenToDrop, uint256 _tokenToCheck, uint256 _amount) external returns (bool);
 
   /**
    * @dev Creates a new Pazari Token
@@ -91,13 +76,14 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
    * @param _isMintable Can tokens be minted? DEFAULT: True
    * @param _amount Amount of tokens to create
    * @param _supplyCap Maximum supply cap. DEFAULT: 0 (infinite supply)
+   * @return uint256 TokenID of new token
    */
   function createNewToken(
     string memory _newURI,
     uint256 _amount,
     uint256 _supplyCap,
     bool _isMintable
-  ) external;
+  ) external returns (uint256);
 
   /**
    * @dev Use this function for producing either ERC721-style collections of many unique tokens or for
@@ -128,7 +114,43 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   ) external returns (bool);
 
   /**
+   * @dev Burns _amount copies of a _tokenID (NOT NEEDED FOR MVP)
+   */
+  function burn(uint256 _tokenID, uint256 _amount) external returns (bool);
+
+  /**
+   * @dev Burns multiple tokenIDs
+   */
+  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool);
+
+  /**
    * @dev Updates token's URI, only contract owners may call
    */
   function setURI(string memory _newURI, uint256 _tokenID) external;
+
+  /**
+   * @notice Adds new owner addresses, only owners can call
+   *
+   * @dev Emits OwnerAdded event for each address added
+   *
+   * @dev Owners can pass the onlyOwners modifier, so be careful with who we add.
+   * This function is intended as a backdoor so we can add new smart contracts in
+   * the future that can access restricted functions, while also eliminating
+   * operator approval for transferFrom(). This exposes some obvious attack
+   * vectors that need to be avoided when/if this function is implemented on
+   * the front-end.
+   */
+  function addOwners(address[] memory _newOwners) external;
+
+  /**
+   * @notice Checks multiple tokenIDs against a single address and returns an array of bools
+   * indicating ownership for each tokenID.
+   *
+   * @param _tokenIDs Array of tokenIDs to check ownership of
+   * @param _owner Wallet address being checked
+   */
+  function ownsToken(uint256[] memory _tokenIDs, address _owner) external view returns (bool[] memory);
+
+  // Not sure if we need this or not
+  function supportsInterface(bytes4 interfaceId) external view override returns (bool);
 }
