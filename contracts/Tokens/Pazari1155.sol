@@ -214,9 +214,11 @@ abstract contract Pazari1155 is AccessControlPTMVP, ERC165, IERC1155MetadataURI 
         if (tokenHolderIndex[recipient][tokenIDs[i]] != 0) {
           tokenHolders[tokenIDs[i]][tokenHolderIndex[recipient][tokenIDs[i]]] = recipient;
         }
-        // if not, then push recipient's address to tokenHolders
-        else tokenHolders[tokenIDs[i]].push(recipient);
-      }
+        // if not, then push recipient's address to tokenHolders, initialize tokenHolderIndex
+        else {
+          tokenHolderIndex[recipient][tokenIDs[i]] = tokenHolders[tokenIDs[i]].length;
+          tokenHolders[tokenIDs[i]].push(recipient);
+        }
     }
   }
 
