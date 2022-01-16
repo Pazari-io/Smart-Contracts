@@ -10,6 +10,7 @@ import "../PaymentRouter/IPaymentRouter.sol";
 import "../Tokens/IPazariTokenMVP.sol";
 
 contract AccessControlMP {
+
   // Maps admin addresses to bool
   mapping(address => bool) public isAdmin;
 
@@ -23,31 +24,51 @@ contract AccessControlMP {
   mapping(uint256 => address) public itemCreator;
 
   // Fires when admins are added or removed
-  event AdminAdded(address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
-  event AdminRemoved(address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
+  event AdminAdded(
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
+  event AdminRemoved(
+    address indexed oldAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
 
   // Fires when item admins are added or removed
   event ItemAdminAdded(
-    uint256 itemID,
-    address newAdmin,
-    address adminAuthorized,
-    string memo,
+    uint256 indexed itemID, 
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
     uint256 timestamp
   );
   event ItemAdminRemoved(
-    uint256 itemID,
-    address oldAdmin,
-    address adminAuthorized,
-    string memo,
+    uint256 indexed itemID, 
+    address indexed oldAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
     uint256 timestamp
   );
 
   // Fires when an address is blacklisted/whitelisted from the Pazari Marketplace
-  event AddressBlacklisted(address blacklistedAddress, address adminAddress, string memo, uint256 timestamp);
-  event AddressWhitelisted(address whitelistedAddress, address adminAddress, string memo, uint256 timestamp);
+  event AddressBlacklisted(
+    address blacklistedAddress, 
+    address indexed adminAddress, 
+    string memo, 
+    uint256 timestamp
+  );
+  event AddressWhitelisted(
+    address whitelistedAddress, 
+    address indexed adminAddress, 
+    string memo, 
+    uint256 timestamp
+  );
 
   constructor(address[] memory _adminAddresses) {
-    for (uint256 i = 0; i < _adminAddresses.length; i++) {
+    for(uint i = 0; i < _adminAddresses.length; i++){
       isAdmin[_adminAddresses[i]] = true;
     }
   }
@@ -57,82 +78,86 @@ contract AccessControlMP {
    * for everything else. See PaymentRouter for more details.
    */
   function _msgSender() public view returns (address) {
-    if (tx.origin != msg.sender && isAdmin[msg.sender]) {
+    if(tx.origin != msg.sender && isAdmin[msg.sender]){
       return tx.origin;
-    } else return msg.sender;
+    }
+    else return msg.sender;
   }
-
+  
   // Adds an address to isAdmin mapping
+  // Emits AdminAdded event
   function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
     require(!isAdmin[_newAddress], "Address is already an admin");
-
+    
     isAdmin[_newAddress] = true;
-
+    
     emit AdminAdded(_newAddress, tx.origin, _memo, block.timestamp);
     return true;
   }
 
   // Adds an address to isItemAdmin mapping
-  function addItemAdmin(
-    uint256 _itemID,
-    address _newAddress,
-    string memory _memo
-  ) external onlyItemAdmin(_itemID) returns (bool) {
-    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
-    require(!isItemAdmin[_itemID][_newAddress], "Address is already an item admin");
+  // Emits ItemAdminAdded event
+  function addItemAdmin(uint256 _itemID, address _newAddress, string memory _memo) external onlyItemAdmin(_itemID) returns (bool) {
+    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");    
+    require(!isItemAdmin[_itemID][_newAddress], "Address is already an item admin");    
 
     isItemAdmin[_itemID][_newAddress] = true;
 
     emit ItemAdminAdded(_itemID, _newAddress, _msgSender(), _memo, block.timestamp);
-    return true;
+    return true;   
   }
 
   // Removes an address from isAdmin mapping
+  // Emits AdminRemoved event
   function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
     require(isAdmin[_oldAddress], "Address is not an admin");
-
+    
     isAdmin[_oldAddress] = false;
-
+    
     emit AdminRemoved(_oldAddress, tx.origin, _memo, block.timestamp);
     return true;
   }
 
   // Removes an address from isItemAdmin mapping
-  function removeItemAdmin(
-    uint256 _itemID,
-    address _oldAddress,
-    string memory _memo
-  ) external onlyItemAdmin(_itemID) returns (bool) {
-    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
-    require(isItemAdmin[_itemID][_oldAddress], "Address is not an admin");
+  // Emits ItemAdminRemoved event
+  function removeItemAdmin(uint256 _itemID, address _oldAddress, string memory _memo) external onlyItemAdmin(_itemID) returns (bool) {
+    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");    
+    require(isItemAdmin[_itemID][_oldAddress], "Address is not an admin");    
     require(itemCreator[_itemID] == _msgSender(), "Cannot remove item creator");
 
     isItemAdmin[_itemID][_oldAddress] = false;
 
     emit ItemAdminRemoved(_itemID, _oldAddress, _msgSender(), _memo, block.timestamp);
     return true;
-  }
-
+  }  
+  
   /**
    * @notice Toggles isBlacklisted for an address. Can only be called by Pazari
    * Marketplace admins. Other contracts that implement address blacklisting
    * can call this contract's isBlacklisted mapping.
+   *
+   * @param _userAddress Address of user being black/whitelisted
+   * @param _memo Provide contextual info/code for why user was black/whitelisted
+   *
+   * @dev Emits AddressBlacklisted event when _userAddress is blacklisted
+   * @dev Emits AddressWhitelisted event when _userAddress is whitelisted
    */
-  function toggleBlacklist(address _listedAddress, string memory _memo) external returns (bool) {
+  function toggleBlacklist(address _userAddress, string memory _memo) external returns (bool){
     require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari admin");
-    require(!isAdmin[_listedAddress], "Cannot blacklist admins");
+    require(!isAdmin[_userAddress], "Cannot blacklist admins");
 
-    if (!isBlacklisted[_listedAddress]) {
-      isBlacklisted[_listedAddress] = true;
-      emit AddressBlacklisted(_listedAddress, _msgSender(), _memo, block.timestamp);
-    } else {
-      isBlacklisted[_listedAddress] = false;
-      emit AddressWhitelisted(_listedAddress, _msgSender(), _memo, block.timestamp);
+    if(!isBlacklisted[_userAddress]){
+      isBlacklisted[_userAddress] = true;
+      emit AddressBlacklisted(_userAddress, _msgSender(), _memo, block.timestamp);
+    }
+    else {
+      isBlacklisted[_userAddress] = false;
+      emit AddressWhitelisted(_userAddress, _msgSender(), _memo, block.timestamp);
     }
 
     return true;
   }
-
+ 
   /**
    * @notice Requires that both msg.sender and tx.origin be admins. This restricts all
    * calls to only Pazari-owned admin addresses, including wallets and contracts, and
@@ -141,7 +166,7 @@ contract AccessControlMP {
   modifier onlyAdmin() {
     require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari-owned addresses");
     _;
-  }
+  } 
 
   modifier noBlacklist() {
     require(!isBlacklisted[_msgSender()], "Caller cannot be blacklisted");
@@ -151,11 +176,14 @@ contract AccessControlMP {
   // Restricts access to admins of a MarketItem
   modifier onlyItemAdmin(uint256 _itemID) {
     require(
-      itemCreator[_itemID] == _msgSender() || isItemAdmin[_itemID][_msgSender()] || isAdmin[_msgSender()],
+      itemCreator[_itemID] == _msgSender() || 
+      isItemAdmin[_itemID][_msgSender()] ||
+      isAdmin[_msgSender()],
       "Caller is neither admin nor item creator"
     );
     _;
   }
+
 }
 
 contract Marketplace is ERC1155Holder, AccessControlMP {
@@ -165,8 +193,8 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   event MarketItemCreated(
     uint256 indexed itemID,
     address indexed nftContract,
-    uint256 indexed tokenID,
-    address admin,
+    uint256 tokenID,
+    address indexed admin,
     uint256 price,
     uint256 amount,
     address paymentToken
@@ -182,14 +210,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   event ItemRestocked(uint256 indexed itemID, uint256 amount);
 
   // Fires when a creator pulls a MarketItem's stock from the Marketplace
-  event ItemPulled(uint256 itemID, uint256 amount);
+  event ItemPulled(uint256 indexed itemID, uint256 amount);
 
   // Fires when forSale is toggled on or off for an itemID
-  event ForSaleToggled(uint256 itemID, bool forSale);
+  event ForSaleToggled(uint256 indexed itemID, bool forSale);
+
+  // Fires when a MarketItem has been deleted
+  event MarketItemDeleted(uint256 itemID, address indexed itemAdmin, uint256 timestamp);
 
   // Fires when market item details are modified
   event MarketItemChanged(
-    uint256 itemID,
+    uint256 indexed itemID,
     uint256 price,
     address paymentContract,
     bool isPush,
@@ -220,7 +251,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bool forSale;
     uint256 itemLimit;
   }
-
+  
   // Counter for items with forSale == false
   Counters.Counter private itemsSoldOut;
 
@@ -233,6 +264,14 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   constructor(address _paymentRouter, address[] memory _admins) AccessControlMP(_admins) {
     //Connect to payment router contract
     iPaymentRouter = IPaymentRouter(_paymentRouter);
+  }
+
+  // Checks if an item was deleted or if _itemID is valid
+  modifier itemExists(uint256 _itemID) {
+    MarketItem memory item = marketItems[_itemID - 1];
+    require(item.itemID == _itemID, "Item was deleted");
+    require(_itemID <= marketItems.length, "Invalid itemID");
+    _;
   }
 
   /**
@@ -355,7 +394,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Check that Marketplace's internal balance matches the token's balanceOf() value
     MarketItem memory item = marketItems[itemID - 1];
     assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
-  }
+  }  
 
   /**
    * @dev Private function that updates internal variables and storage for a new MarketItem
@@ -405,7 +444,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     itemCreator[itemID] = _msgSender();
     // Pushes MarketItem to marketItems[]
     marketItems.push(item);
-
+  
     // Push itemID to sellersMarketItems mapping array
     // _msgSender == sellerAddress
     sellersMarketItems[_msgSender()].push(item.itemID);
@@ -415,7 +454,15 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
 
     // Emits MarketItemCreated event
     // _msgSender == sellerAddress
-    emit MarketItemCreated(itemID, _tokenContract, _tokenID, _msgSender(), _price, _amount, _paymentContract);
+    emit MarketItemCreated(
+      itemID,
+      _tokenContract,
+      _tokenID,
+      _msgSender(),
+      _price,
+      _amount,
+      _paymentContract
+    );
   }
 
   /**
@@ -425,9 +472,11 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
    *
+   * @dev Emits ItemSoldOut event
+   *
    * note Providing _amount == 0 will purchase the item's full itemLimit.
    */
-  function buyMarketItem(uint256 _itemID, uint256 _amount) external noBlacklist returns (bool) {
+  function buyMarketItem(uint256 _itemID, uint256 _amount) external noBlacklist itemExists(_itemID) returns (bool) {
     // Pull data from itemID's MarketItem struct
     MarketItem memory item = marketItems[_itemID - 1];
     uint256 balance = IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID);
@@ -437,14 +486,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     uint256 totalCost = item.price * _amount;
 
     /* ========== CHECKS ========== */
-    require(_itemID <= marketItems.length, "Item does not exist");
-    require(item.forSale, "Item not for sale");
+    require(
+      !isItemAdmin[item.itemID][_msgSender()] ||
+      itemCreator[item.itemID] != _msgSender(), 
+      "Can't buy your own item"
+    );
     require(item.amount > 0, "Item sold out");
-    require(!isItemAdmin[item.itemID][_msgSender()], "Can't buy your own item");
+    require(item.forSale, "Item not for sale");
     require(balance < itemLimit, "Buyer already owns the item limit");
     // If _amount == 0, then purchase itemLimit - balance
     // If _amount + balance surpasses itemLimit, then purchase itemLimit - balance
-    if (_amount == 0 || _amount + balance > itemLimit) {
+    if(_amount == 0 || _amount + balance > itemLimit){
       _amount = itemLimit - balance;
     }
 
@@ -466,16 +518,10 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     require(IERC20(item.paymentContract).approve(address(this), totalCost), "ERC20 approval failure");
 
     // Pull payment tokens from msg.sender to Marketplace
-    require(
-      IERC20(item.paymentContract).transferFrom(_msgSender(), address(this), totalCost),
-      "ERC20 transfer failure"
-    );
+    require(IERC20(item.paymentContract).transferFrom(_msgSender(), address(this), totalCost), "ERC20 transfer failure");
 
     // Approve payment tokens for transfer to PaymentRouter
-    require(
-      IERC20(item.paymentContract).approve(address(iPaymentRouter), totalCost),
-      "ERC20 approval failure"
-    );
+    require(IERC20(item.paymentContract).approve(address(iPaymentRouter), totalCost), "ERC20 approval failure");
 
     // Send ERC20 tokens through PaymentRouter, isPush determines which function is used
     // note PaymentRouter functions make external calls to ERC20 contracts, thus they are interactions
@@ -499,30 +545,26 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ItemRestocked event
    */
-  function restockItem(uint256 _itemID, uint256 _amount)
-    external
-    noBlacklist
-    onlyItemAdmin(_itemID)
-    returns (bool)
-  {
+  function restockItem(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     /* ========== CHECKS ========== */
     MarketItem memory item = marketItems[_itemID - 1];
-    require(marketItems.length >= _itemID, "MarketItem does not exist");
-    require(
-      IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount,
-      "Insufficient token balance"
-    );
+    require(IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount, "Insufficient token balance");
 
     /* ========== EFFECTS ========== */
-    marketItems[_itemID - 1].amount += _amount;
-    emit ItemRestocked(_itemID, _amount);
+    // If item is out of stock
+    if(item.amount == 0){
+      itemsSoldOut.decrement();
+      item.forSale = true;
+    }
+
+    item.amount += _amount;
+    marketItems[_itemID - 1] = item; // Update actual market item
 
     /* ========== INTERACTIONS ========== */
     IERC1155(item.tokenContract).safeTransferFrom(_msgSender(), address(this), item.tokenID, _amount, "");
 
-    assert(
-      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == marketItems[_itemID - 1].amount
-    );
+    assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == marketItems[_itemID - 1].amount);
+    emit ItemRestocked(_itemID, _amount);
     return true;
   }
 
@@ -532,24 +574,19 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
    *
-   * @dev Emits StockPulled event
+   * @dev Emits ItemPulled event
    */
-  function pullStock(uint256 _itemID, uint256 _amount)
-    external
-    noBlacklist
-    onlyItemAdmin(_itemID)
-    returns (bool)
-  {
+  function pullStock(uint256 _itemID, uint256 _amount) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     /* ========== CHECKS ========== */
-    // itemID will always be <= marketItems.length, but cannot be > marketItems.length
-    require(_itemID <= marketItems.length, "MarketItem does not exist");
     // Store initial values
     MarketItem memory item = marketItems[_itemID - 1];
     require(item.amount >= _amount, "Not enough inventory to pull");
 
-    // Pulls all remaining tokens if _amount == 0
-    if (_amount == 0) {
+    // Pulls all remaining tokens if _amount == 0, sets forSale to false
+    if (_amount == 0 || _amount >= item.amount) {
       _amount = item.amount;
+      marketItems[_itemID - 1].forSale = false;
+      itemsSoldOut.increment();
     }
 
     /* ========== EFFECTS ========== */
@@ -561,7 +598,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     emit ItemPulled(_itemID, _amount);
 
     // Assert internal balances updated correctly, item.amount was initial amount
-    assert(marketItems[_itemID - 1].amount < item.amount);
+    //assert(marketItems[_itemID - 1].amount < item.amount);
     return true;
   }
 
@@ -594,7 +631,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bool _isPush,
     bytes32 _routeID,
     uint256 _itemLimit
-  ) external noBlacklist onlyItemAdmin(_itemID) returns (bool) {
+  ) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
     MarketItem memory oldItem = marketItems[_itemID - 1];
     if (!oldItem.routeMutable || _routeID == 0) {
       // If the payment route is not mutable, then set the input equal to the old routeID
@@ -632,8 +669,10 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @param _itemID Marketplace ID of item for sale
    * @return forSale True = item reactivated, false = item deactivated
+   *
+   * @dev Emits ForSaleToggled event
    */
-  function toggleForSale(uint256 _itemID) external noBlacklist onlyItemAdmin(_itemID) returns (bool forSale) {
+  function toggleForSale(uint256 _itemID) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool forSale) {
     // Create singleton array for _itemID
     uint256[] memory itemID = new uint256[](1);
     itemID[0] = _itemID;
@@ -651,6 +690,37 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Event added
     emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
     return marketItems[_itemID - 1].forSale;
+  }
+
+  /**
+   * @notice Deletes a MarketItem, setting all its properties to default values
+   * @dev Does not remove itemID or the entry in marketItems, just sets properties to default
+   * and removes tokenMap mappings. This frees up the tokenID to be used in a new MarketItem.
+   *
+   * @dev Emits MarketItemDeleted event
+   */
+  function deleteMarketItem(uint256 _itemID) external noBlacklist itemExists(_itemID) returns (bool) {
+    MarketItem memory item = marketItems[_itemID - 1];
+    // Caller must either be item's creator or a Pazari admin, no itemAdmins allowed
+    require(
+      _msgSender() == itemCreator[_itemID] ||
+      isAdmin[_msgSender()],
+      "Only item creators and Pazari admins can delete items");
+    // Require item has been completely unstocked and deactivated
+    require(!item.forSale, "Deactivate item before deleting");
+    require(item.amount == 0, "Pull all stock before deleting");
+
+    // Erase tokenMap mapping, frees up tokenID to be used in a new MarketItem
+    delete tokenMap[item.tokenContract][item.tokenID];
+    // Set all properties to defaults by deletion
+    delete marketItems[_itemID - 1];
+    // Erase itemCreator mapping
+    delete itemCreator[_itemID];
+    // Erase sellersMarketItems entry
+
+    // RETURN
+    emit MarketItemDeleted(_itemID, _msgSender(), block.timestamp);
+    return true;
   }
 
   /**
@@ -746,7 +816,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @notice Returns an array of MarketItems created the seller's address
    * @dev No restrictions for calling this
    */
-  function getSellersMarketItems(address _sellerAddress) public view returns (uint256[] memory) {
+  function getSellersMarketItems(address _sellerAddress) public view returns (uint256[] memory){
     return sellersMarketItems[_sellerAddress];
   }
 

@@ -101,16 +101,23 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Estimating gas: " + (await pazariMVP.removeAdmin.estimateGas(seller, message, { from: pazariDev })));
   await pazariMVP.removeAdmin(seller, message, { from: pazariDev });
   console.log("isAdmin[seller]: " + (await pazariMVP.isAdmin(seller)));
-
+/*
   // Test createNewUserAndListing()
-  console.log("\n1. RUNNING createNewUserAndListing(seller):");
+  console.log("\n1. RUNNING createUserProfile(seller):");
   console.log("Inputs: " + uri1 + ", " + amount1 + ", " + price1);
   console.log("Create an item with amount " + amount1 + " and price $" + price1);
   console.log(
     "Estimating gas: " + (await pazariMVP.createUserProfile.estimateGas(uri1, amount1, price1, { from: seller })),
   );
   await pazariMVP.createUserProfile(uri1, amount1, price1, { from: seller });
-
+*/
+console.log("\n1. RUNNING newTokenListing(seller):");
+console.log("Inputs: " + uri1 + ", " + amount1 + ", " + price1);
+console.log("Create an item with amount " + amount1 + " and price $" + price1);
+console.log(
+  "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri1, amount1, price1, { from: seller })),
+);
+await pazariMVP.newTokenListing(uri1, amount1, price1, { from: seller });
   // Test getUserProfile()
   // Test ability to return itemIDs array from returned UserProfile
   console.log("\n2. RUNNING getUserProfile(seller)");
@@ -169,16 +176,16 @@ module.exports = async function (deployer, network, accounts) {
   console.log(await market.getMarketItems(forSaleItemIDs));
 
   // Run newUser() for seller2
-  console.log("\n10. RUNNING pazariMVP.createUserProfile(seller2)");
+  console.log("\n10. RUNNING pazariMVP.newTokenListing(seller2)");
   var uri3 = "SOME_URI_HERE";
   var amount3 = 30;
   var price3 = web3.utils.toWei("14.99");
   console.log("Create an item with amount " + amount3 + " and price $" + price3);
   console.log("Inputs: " + uri3 + ", " + amount3 + ", " + price3);
   console.log(
-    "Estimating gas: " + (await pazariMVP.createUserProfile.estimateGas(uri1, amount1, price1, { from: seller2 })),
+    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri1, amount1, price1, { from: seller2 })),
   );
-  await pazariMVP.createUserProfile(uri1, amount1, price1, { from: seller2 });
+  await pazariMVP.newTokenListing(uri1, amount1, price1, { from: seller2 });
 
   // Run newTokenListing(seller) (not seller2)
   // Need to check that tokenIDs and itemIDs increment independently and correctly
@@ -254,9 +261,5 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Checking balanceOf PazariMVP: " + (await someToken.balanceOf(pazariMVP.address, 1)));
   console.log("Checking balanceOf nftOwner: " + (await someToken.balanceOf(nftOwner, 1)));
 
-  /*
-  // Test that recoverNFT() does not work for anyone else
-  console.log("\nTesting that recoverNFT() reverts when called by non-Pazari address")
-  await pazariMVP.recoverNFT(someToken.address, 1, 1, nftOwner, {from: nftOwner});  
-  */
+  console.log("\nTESTING COMPLETE");
 };

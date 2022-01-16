@@ -40,7 +40,7 @@ module.exports = async function (deployer, network, accounts) {
 
   //DEPLOY MARKETPLACE, then
   await deployer.deploy(Marketplace, router.address, [devWallet], {
-    gas: 4700000,
+    gas: 6700000,
     gasPrice: 8000000000,
     from: seller,
   });
@@ -141,7 +141,9 @@ module.exports = async function (deployer, network, accounts) {
   await market.removeAdmin(seller, { from: devWallet });
   console.log("isAdmin[seller]: " + (await market.isAdmin(seller)));
 
-  console.log("\n0b. Testing toggleBlacklistAddress(seller)");
+  //TEST BLACKLISTING
+  console.log("\n0b. Testing toggleBlacklistAddress(seller)")
+
   reason = "Sold copyrighted material";
   console.log("isBlacklisted[seller]: " + (await market.isBlacklisted(seller)));
   console.log("Blacklisting seller : Inputs: seller = " + seller + ", reason = " + reason);
@@ -163,10 +165,11 @@ module.exports = async function (deployer, network, accounts) {
   //SELLER 1
   console.log("\n1. TESTING newPazariTokenMVP(contractOwners):");
   contractOwners = [seller, router.address, market.address, factory.address];
-  amountOfGas = await factory.newPazariTokenMVP.estimateGas(contractOwners, { from: seller });
-  console.log("Estimating gas cost: " + amountOfGas);
+
   let tokenAddress;
   let token;
+  amountOfGas = await factory.newPazariTokenMVP.estimateGas(contractOwners, {from: seller});
+  console.log("Estimating gas cost: " + amountOfGas);
   // Get address new token contract will be deployed to
   tokenAddress = await factory.newPazariTokenMVP.call(contractOwners);
   console.log("tokenAddress = " + tokenAddress);
@@ -453,17 +456,18 @@ module.exports = async function (deployer, network, accounts) {
   console.log("\n13b. TESTING: restockItem()");
   let restockAmount = 50;
   item = await market.getMarketItems([itemID2]);
-  itemAmount = item[0].amount;
-  console.log("ItemID " + item.itemID + " stock: " + (await itemAmount));
-  console.log("Marketplace ItemID2 balanceOf: " + (await token2.balanceOf(market.address, tokenID2)));
-  console.log("Seller2 balanceOf: " + (await token2.balanceOf(seller2, tokenID2)));
-  console.log("Running restockItem(itemID, pullAmount)");
-  console.log("Estimating gas: " + (await market.restockItem.estimateGas(itemID2, restockAmount, { from: seller2 })));
+  itemAmount = item[0].amount
+  console.log("ItemID " + await item[0].itemID + " stock: " + await itemAmount);
+  console.log("Marketplace ItemID2 balanceOf: " + await token2.balanceOf(market.address, tokenID2));
+  console.log("Seller2 balanceOf: " + await token2.balanceOf(seller2, tokenID2));
+  console.log("Running restockItem(itemID, restockAmount), restockAmount = " + restockAmount);
+  console.log("Estimating gas: " + await market.restockItem.estimateGas(itemID2, restockAmount, { from: seller2 }));
   await market.restockItem(itemID2, restockAmount, { from: seller2 });
   item = await market.getMarketItems([itemID2]);
   itemAmount = item[0].amount;
-  console.log("ItemID " + item.itemID + " stock: " + (await itemAmount));
-  console.log("Marketplace ItemID2 balanceOf: " + (await token2.balanceOf(market.address, tokenID2)));
+  console.log("ItemID " + item[0].itemID + " stock: " + await itemAmount);
+  console.log("Marketplace ItemID2 balanceOf: " + await token2.balanceOf(market.address, tokenID2));
+
 
   //TEST MODIFYING MARKET ITEMS
   price = web3.utils.toWei("59.99");
@@ -472,8 +476,10 @@ module.exports = async function (deployer, network, accounts) {
   isPush3 = false;
   itemLimit1 = 2;
   // ITEM 1
-  console.log("\n14. TESTING: modifyMarketItem()");
-  console.log("Getting ItemID 1: ");
+  console.log("\n14. TESTING: modifyMarketItem()")
+  console.log("Let's change all three items to use pull routes, and then buy them all")
+  console.log("Getting ItemID 1: ")
+
   console.log(await market.getMarketItems([itemID]));
   console.log("Running modifyMarketItem()");
   console.log(
@@ -492,7 +498,8 @@ module.exports = async function (deployer, network, accounts) {
       })),
   );
   await market.modifyMarketItem(itemID, price, stablecoin.address, isPush, routeID, itemLimit1, { from: seller });
-  console.log("Getting itemID " + itemID);
+  console.log("Modification done, getting itemID " + itemID);
+
   console.log(await market.getMarketItems([itemID]));
 
   // ITEM 2
@@ -538,12 +545,36 @@ module.exports = async function (deployer, network, accounts) {
   console.log(await market.getMarketItems([itemID3]));
 
   //PLACE BUY ORDERS SO PAYMENTS NOW USE HOLD TOKENS
+  balance = await token.balanceOf(buyer, tokenID);
+  balance2 = await token2.balanceOf(buyer, tokenID2);
+  balance3 = await token3.balanceOf(buyer, tokenID3);
+  console.log("Buyer balanceOf itemID 1: " + balance);
+  console.log("Buyer balanceOf itemID 2: " + balance2);
+  console.log("Buyer balanceOf itemID 3: " + balance3);
   console.log("Placing buy orders for itemIDs 1, 2, 3");
-  console.log(await market.getMarketItems([itemID]));
-  buyAmount = 5;
-  market.buyMarketItem(itemID, buyAmount, { from: buyer });
-  market.buyMarketItem(itemID2, buyAmount2, { from: buyer });
-  market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
+  //console.log(await market.getMarketItems([itemID]));
+  buyAmount = 0;
+  buyAmount2 = 5;
+  buyAmount3 = 10;
+  console.log("Buying " + buyAmount + " of itemID " + itemID + " (0 = buy item limit)");
+  await market.buyMarketItem(itemID, buyAmount, { from: buyer });
+  console.log("Buying " + buyAmount2 + " of itemID " + itemID2 + " (0 = buy item limit)");
+  await market.buyMarketItem(itemID2, buyAmount2, { from: buyer });
+  console.log("Buying " + buyAmount3 + " of itemID " + itemID3 + " (0 = buy item limit)");
+  await market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
+  
+  console.log("Checking balances of tokens again, make sure balance <= itemLimit")
+  items = await market.getMarketItems([itemID, itemID2, itemID3]);
+  tokenID = await items[0].tokenID;
+  tokenID2 = await items[1].tokenID;
+  tokenID3 = await items[2].tokenID;
+  balance = await token.balanceOf(buyer, tokenID);
+  balance2 = await token2.balanceOf(buyer, tokenID2);
+  balance3 = await token3.balanceOf(buyer, tokenID3);
+  console.log("Buyer balanceOf itemID 1: " + balance);
+  console.log("Buyer balanceOf itemID 2: " + balance2);
+  console.log("Buyer balanceOf itemID 3: " + balance3);
+
   console.log("Done. There should now be money available to collect from pullTokens");
   console.log("Tokens available for collection:");
   console.log(
@@ -605,5 +636,17 @@ module.exports = async function (deployer, network, accounts) {
   forSale = item[0].forSale;
   buyAmount = 2;
   console.log("Item for sale? " + forSale);
-  console.log("TESTING COMPLETE");
+  
+  //DELETE ITEM
+  console.log("\n15. TESTING: deleteMarketItem()")
+  console.log("Pull all item stock for itemID " + itemID);
+  await market.pullStock(itemID, 0)
+  console.log("Deleting itemID " + itemID);
+  console.log("Estimating gas: " + await market.deleteMarketItem.estimateGas(itemID, { from: seller }));
+  await market.deleteMarketItem(itemID, { from: seller })
+  console.log("Done, now getting itemID " + itemID)
+  console.log(await market.getMarketItems([itemID]));
+
+  console.log("TESTING COMPLETE")
+
 };
