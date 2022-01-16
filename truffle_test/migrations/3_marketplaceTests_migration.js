@@ -497,6 +497,7 @@ module.exports = async function (deployer, network, accounts) {
         from: seller,
       })),
   );
+  await market.modifyMarketItem(itemID, price, stablecoin.address, isPush, routeID, itemLimit1, { from: seller });
   console.log("Modification done, getting itemID " + itemID);
 
   console.log(await market.getMarketItems([itemID]));
@@ -544,12 +545,36 @@ module.exports = async function (deployer, network, accounts) {
   console.log(await market.getMarketItems([itemID3]));
 
   //PLACE BUY ORDERS SO PAYMENTS NOW USE HOLD TOKENS
+  balance = await token.balanceOf(buyer, tokenID);
+  balance2 = await token2.balanceOf(buyer, tokenID2);
+  balance3 = await token3.balanceOf(buyer, tokenID3);
+  console.log("Buyer balanceOf itemID 1: " + balance);
+  console.log("Buyer balanceOf itemID 2: " + balance2);
+  console.log("Buyer balanceOf itemID 3: " + balance3);
   console.log("Placing buy orders for itemIDs 1, 2, 3");
-  console.log(await market.getMarketItems([itemID]));
-  buyAmount = 5;
+  //console.log(await market.getMarketItems([itemID]));
+  buyAmount = 0;
+  buyAmount2 = 5;
+  buyAmount3 = 10;
+  console.log("Buying " + buyAmount + " of itemID " + itemID + " (0 = buy item limit)");
   await market.buyMarketItem(itemID, buyAmount, { from: buyer });
+  console.log("Buying " + buyAmount2 + " of itemID " + itemID2 + " (0 = buy item limit)");
   await market.buyMarketItem(itemID2, buyAmount2, { from: buyer });
+  console.log("Buying " + buyAmount3 + " of itemID " + itemID3 + " (0 = buy item limit)");
   await market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
+  
+  console.log("Checking balances of tokens again, make sure balance <= itemLimit")
+  items = await market.getMarketItems([itemID, itemID2, itemID3]);
+  tokenID = await items[0].tokenID;
+  tokenID2 = await items[1].tokenID;
+  tokenID3 = await items[2].tokenID;
+  balance = await token.balanceOf(buyer, tokenID);
+  balance2 = await token2.balanceOf(buyer, tokenID2);
+  balance3 = await token3.balanceOf(buyer, tokenID3);
+  console.log("Buyer balanceOf itemID 1: " + balance);
+  console.log("Buyer balanceOf itemID 2: " + balance2);
+  console.log("Buyer balanceOf itemID 3: " + balance3);
+
   console.log("Done. There should now be money available to collect from pullTokens");
   console.log("Tokens available for collection:");
   console.log(
