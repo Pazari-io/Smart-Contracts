@@ -54,8 +54,6 @@ interface IPazariMVP {
     uint256 itemLimit;
   }
 
-
-
   /**
    * @notice Creates a new token and lists it on the Pazari Marketplace.  Will create a new contract if this is a new user.
    * @return tokenID The tokenID and itemID of the new token listed

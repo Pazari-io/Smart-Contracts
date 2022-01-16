@@ -101,7 +101,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Estimating gas: " + (await pazariMVP.removeAdmin.estimateGas(seller, message, { from: pazariDev })));
   await pazariMVP.removeAdmin(seller, message, { from: pazariDev });
   console.log("isAdmin[seller]: " + (await pazariMVP.isAdmin(seller)));
-/*
+  /*
   // Test createNewUserAndListing()
   console.log("\n1. RUNNING createUserProfile(seller):");
   console.log("Inputs: " + uri1 + ", " + amount1 + ", " + price1);
@@ -111,13 +111,13 @@ module.exports = async function (deployer, network, accounts) {
   );
   await pazariMVP.createUserProfile(uri1, amount1, price1, { from: seller });
 */
-console.log("\n1. RUNNING newTokenListing(seller):");
-console.log("Inputs: " + uri1 + ", " + amount1 + ", " + price1);
-console.log("Create an item with amount " + amount1 + " and price $" + price1);
-console.log(
-  "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri1, amount1, price1, { from: seller })),
-);
-await pazariMVP.newTokenListing(uri1, amount1, price1, { from: seller });
+  console.log("\n1. RUNNING newTokenListing(seller):");
+  console.log("Inputs: " + uri1 + ", " + amount1 + ", " + price1);
+  console.log("Create an item with amount " + amount1 + " and price $" + price1);
+  console.log(
+    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri1, amount1, price1, { from: seller })),
+  );
+  await pazariMVP.newTokenListing(uri1, amount1, price1, { from: seller });
   // Test getUserProfile()
   // Test ability to return itemIDs array from returned UserProfile
   console.log("\n2. RUNNING getUserProfile(seller)");

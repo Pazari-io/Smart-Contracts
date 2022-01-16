@@ -142,7 +142,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log("isAdmin[seller]: " + (await market.isAdmin(seller)));
 
   //TEST BLACKLISTING
-  console.log("\n0b. Testing toggleBlacklistAddress(seller)")
+  console.log("\n0b. Testing toggleBlacklistAddress(seller)");
 
   reason = "Sold copyrighted material";
   console.log("isBlacklisted[seller]: " + (await market.isBlacklisted(seller)));
@@ -168,7 +168,7 @@ module.exports = async function (deployer, network, accounts) {
 
   let tokenAddress;
   let token;
-  amountOfGas = await factory.newPazariTokenMVP.estimateGas(contractOwners, {from: seller});
+  amountOfGas = await factory.newPazariTokenMVP.estimateGas(contractOwners, { from: seller });
   console.log("Estimating gas cost: " + amountOfGas);
   // Get address new token contract will be deployed to
   tokenAddress = await factory.newPazariTokenMVP.call(contractOwners);
@@ -456,18 +456,17 @@ module.exports = async function (deployer, network, accounts) {
   console.log("\n13b. TESTING: restockItem()");
   let restockAmount = 50;
   item = await market.getMarketItems([itemID2]);
-  itemAmount = item[0].amount
-  console.log("ItemID " + await item[0].itemID + " stock: " + await itemAmount);
-  console.log("Marketplace ItemID2 balanceOf: " + await token2.balanceOf(market.address, tokenID2));
-  console.log("Seller2 balanceOf: " + await token2.balanceOf(seller2, tokenID2));
+  itemAmount = item[0].amount;
+  console.log("ItemID " + (await item[0].itemID) + " stock: " + (await itemAmount));
+  console.log("Marketplace ItemID2 balanceOf: " + (await token2.balanceOf(market.address, tokenID2)));
+  console.log("Seller2 balanceOf: " + (await token2.balanceOf(seller2, tokenID2)));
   console.log("Running restockItem(itemID, restockAmount), restockAmount = " + restockAmount);
-  console.log("Estimating gas: " + await market.restockItem.estimateGas(itemID2, restockAmount, { from: seller2 }));
+  console.log("Estimating gas: " + (await market.restockItem.estimateGas(itemID2, restockAmount, { from: seller2 })));
   await market.restockItem(itemID2, restockAmount, { from: seller2 });
   item = await market.getMarketItems([itemID2]);
   itemAmount = item[0].amount;
-  console.log("ItemID " + item[0].itemID + " stock: " + await itemAmount);
-  console.log("Marketplace ItemID2 balanceOf: " + await token2.balanceOf(market.address, tokenID2));
-
+  console.log("ItemID " + item[0].itemID + " stock: " + (await itemAmount));
+  console.log("Marketplace ItemID2 balanceOf: " + (await token2.balanceOf(market.address, tokenID2)));
 
   //TEST MODIFYING MARKET ITEMS
   price = web3.utils.toWei("59.99");
@@ -476,9 +475,9 @@ module.exports = async function (deployer, network, accounts) {
   isPush3 = false;
   itemLimit1 = 2;
   // ITEM 1
-  console.log("\n14. TESTING: modifyMarketItem()")
-  console.log("Let's change all three items to use pull routes, and then buy them all")
-  console.log("Getting ItemID 1: ")
+  console.log("\n14. TESTING: modifyMarketItem()");
+  console.log("Let's change all three items to use pull routes, and then buy them all");
+  console.log("Getting ItemID 1: ");
 
   console.log(await market.getMarketItems([itemID]));
   console.log("Running modifyMarketItem()");
@@ -562,8 +561,8 @@ module.exports = async function (deployer, network, accounts) {
   await market.buyMarketItem(itemID2, buyAmount2, { from: buyer });
   console.log("Buying " + buyAmount3 + " of itemID " + itemID3 + " (0 = buy item limit)");
   await market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
-  
-  console.log("Checking balances of tokens again, make sure balance <= itemLimit")
+
+  console.log("Checking balances of tokens again, make sure balance <= itemLimit");
   items = await market.getMarketItems([itemID, itemID2, itemID3]);
   tokenID = await items[0].tokenID;
   tokenID2 = await items[1].tokenID;
@@ -636,17 +635,16 @@ module.exports = async function (deployer, network, accounts) {
   forSale = item[0].forSale;
   buyAmount = 2;
   console.log("Item for sale? " + forSale);
-  
+
   //DELETE ITEM
-  console.log("\n15. TESTING: deleteMarketItem()")
+  console.log("\n15. TESTING: deleteMarketItem()");
   console.log("Pull all item stock for itemID " + itemID);
-  await market.pullStock(itemID, 0)
+  await market.pullStock(itemID, 0);
   console.log("Deleting itemID " + itemID);
-  console.log("Estimating gas: " + await market.deleteMarketItem.estimateGas(itemID, { from: seller }));
-  await market.deleteMarketItem(itemID, { from: seller })
-  console.log("Done, now getting itemID " + itemID)
+  console.log("Estimating gas: " + (await market.deleteMarketItem.estimateGas(itemID, { from: seller })));
+  await market.deleteMarketItem(itemID, { from: seller });
+  console.log("Done, now getting itemID " + itemID);
   console.log(await market.getMarketItems([itemID]));
 
-  console.log("TESTING COMPLETE")
-
+  console.log("TESTING COMPLETE");
 };

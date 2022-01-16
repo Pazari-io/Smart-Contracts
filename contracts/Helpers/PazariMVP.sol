@@ -88,12 +88,7 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   );
 
   // Fires when a new user joins and lists an item
-  event NewUserCreated(
-    address userAddress,
-    bytes32 routeID,
-    address tokenContractAddress,
-    uint256 timestamp
-  );
+  event NewUserCreated(address userAddress, bytes32 routeID, address tokenContractAddress, uint256 timestamp);
 
   // Fires after a token contract is cloned
   event ContractCloned(
