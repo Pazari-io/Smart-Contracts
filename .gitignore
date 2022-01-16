@@ -2,6 +2,8 @@
 cache/
 artifacts/
 build/
+.idea/
+Notes.txt
 
 coverage*
 types/factories

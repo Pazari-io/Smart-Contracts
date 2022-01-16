@@ -78,12 +78,13 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
   // Fires when a new token is listed for sale
   event NewTokenListed(
-    address indexed itemOwner,
-    uint256 itemID,
-    uint256 indexed price,
+    uint256 indexed itemID,
     address indexed tokenContract,
+    uint256 indexed price,
     uint256 tokenID,
-    uint256 amount
+    uint256 amount,
+    string uri,
+    address sender
   );
 
   // Fires when a new user joins and lists an item
@@ -91,7 +92,6 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     address userAddress,
     bytes32 routeID,
     address tokenContractAddress,
-    uint256 itemID,
     uint256 timestamp
   );
 
@@ -165,16 +165,8 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   /**
    * @notice Auto-generates a new payment route, clones a token contract, mints a token, and lists
    * it on the Pazari iMarketplace in one turn. This function only needs three inputs.
-   *
-   * @param _URI URL of the JSON public metadata file, usually an IPFS URI
-   * @param _amount Amount of tokens to be minted and listed
-   * @param _price Price in USD for each token.
    */
-  function createUserProfile(
-    string memory _URI,
-    uint256 _amount,
-    uint256 _price
-  ) external returns (UserProfile memory) {
+  function createUserProfile() private returns (address) {
     // Require that admins completed initialization
     require(
       IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) &&
@@ -214,33 +206,15 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
       block.timestamp
     );
 
-    // PazariTokenMVP \\
-    // Mint new Pazari token
-    uint256 tokenID = IPazariTokenMVP(tokenContractAddress).createNewToken(_URI, _amount, 0, true);
-
-    // Marketplace \\
-    // List Pazari token on Marketplace
-    uint256 itemID = iMarketplace.createMarketItem(
-      tokenContractAddress,
-      tokenID,
-      _amount,
-      _price,
-      address(iERC20),
-      routeID
-    );
-    itemIDs.push(itemID);
-
-    // PazariMVP \\
     // Create UserProfile struct
     userProfile[msgSender].userAddress = msgSender;
     userProfile[msgSender].routeID = routeID;
     userProfile[msgSender].tokenContract = tokenContractAddress;
-    userProfile[msgSender].itemIDs.push(itemID);
 
     // Emits all UserProfile struct properties
-    emit NewUserCreated(msgSender, routeID, tokenContractAddress, itemID, block.timestamp);
+    emit NewUserCreated(msgSender, routeID, tokenContractAddress, block.timestamp);
 
-    return userProfile[msgSender];
+    return tokenContractAddress;
   }
 
   /**
@@ -273,9 +247,10 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     // User cannot create 0 tokens
     require(_amount > 0, "Amount must be greater than 0");
     // Require that user already has their own token contract
-    require(tokenContract != address(0), "User does not have token contract!");
+    if (tokenContract == address(0)) {
+      tokenContract = createUserProfile();
+    }
 
-    // PazariTokenMVP \\
     // Create new Pazari token
     tokenID = IPazariTokenMVP(tokenContract).createNewToken(_URI, _amount, 0, true);
 
@@ -290,11 +265,10 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
       userProfile[msgSender].routeID
     );
 
-    // PazariMVP \\
     itemIDs.push(itemID);
     userProfile[msgSender].itemIDs.push(itemID);
 
-    emit NewTokenListed(msgSender, itemID, _price, tokenContract, tokenID, _amount);
+    emit NewTokenListed(itemID, tokenContract, _price, tokenID, _amount, _URI, msgSender);
     return (tokenID, itemID);
   }
 

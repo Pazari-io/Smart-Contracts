@@ -54,23 +54,10 @@ interface IPazariMVP {
     uint256 itemLimit;
   }
 
-  /**
-   * @notice Auto-generates a new payment route, clones a token contract, mints a token, and lists
-   * it on the Pazari marketplace in one turn. This function only needs three inputs.
-   *
-   * @param _URI URL of the JSON public metadata file, usually an IPFS URI
-   * @param _amount Amount of tokens to be minted and listed
-   * @param _price Price in USD for each token.
-   * @return UserProfile The newly created UserProfile struct
-   */
-  function createUserProfile(
-    string memory _URI,
-    uint256 _amount,
-    uint256 _price
-  ) external returns (UserProfile memory);
+
 
   /**
-   * @notice Creates a new token and lists it on the Pazari Marketplace
+   * @notice Creates a new token and lists it on the Pazari Marketplace.  Will create a new contract if this is a new user.
    * @return tokenID The tokenID and itemID of the new token listed
    *
    * @dev Assumes the seller is using the same PaymentRoute and token contract
