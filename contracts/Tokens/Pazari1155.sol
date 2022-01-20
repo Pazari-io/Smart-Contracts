@@ -4,17 +4,71 @@
  * @dev This is the ERC1155 contract that PazariTokens are made from. All ERC1155-native
  * functions are here, as well as Pazari-native functions that are essential.
  */
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "../Dependencies/IERC1155MetadataURI.sol";
 import "../Dependencies/Address.sol";
-import "../Dependencies/Context.sol";
 import "../Dependencies/ERC165.sol";
 import "../Marketplace/Marketplace.sol";
 
-abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
+contract AccessControlPTMVP {
+  // Maps admin addresses to bool
+  // These are NOT Pazari developer admins, but can include Pazari helpers
+  mapping(address => bool) public isAdmin;
+
+  // The address that cloned this contract, never loses admin access
+  address internal immutable originalOwner;
+
+  constructor(address[] memory _adminAddresses) {
+    for (uint256 i = 0; i < _adminAddresses.length; i++) {
+      isAdmin[_adminAddresses[i]] = true;
+    }
+    originalOwner = _msgSender();
+  }
+
+  modifier onlyAdmin() {
+    require(isAdmin[_msgSender()], "Caller is not admin");
+    _;
+  }
+
+  /**
+   * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
+   * for everything else. This only permits Pazari helper contracts to use tx.origin,
+   * and all external non-admin contracts and wallets will use msg.sender.
+   * @dev This design is vulnerable to phishing attacks if a helper contract that
+   * has isAdmin does NOT implement the same _msgSender() logic.
+   * @dev _msgSender()'s context is the contract it is being called from, and uses
+   * that contract's AccessControl storage for isAdmin. External contracts can use
+   * each other's _msgSender() for if they need to use the same AccessControl storage.
+   */
+  function _msgSender() public view returns (address) {
+    if (tx.origin != msg.sender && isAdmin[msg.sender]) {
+      return tx.origin;
+    } else return msg.sender;
+  }
+
+  // Adds an address to isAdmin mapping
+  // Requires both tx.origin and msg.sender be admins
+  function addAdmin(address _newAddress) external returns (bool) {
+    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Caller is not admin");
+    require(!isAdmin[_newAddress], "Address is already an admin");
+    isAdmin[_newAddress] = true;
+    return true;
+  }
+
+  // Removes an address from isAdmin mapping
+  // Requires both tx.origin and msg.sender be admins
+  function removeAdmin(address _oldAddress) external returns (bool) {
+    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Caller is not admin");
+    require(_oldAddress != originalOwner, "Cannot remove original owner");
+    require(isAdmin[_oldAddress], "Address must be an admin");
+    isAdmin[_oldAddress] = false;
+    return true;
+  }
+}
+
+abstract contract Pazari1155 is AccessControlPTMVP, ERC165, IERC1155MetadataURI {
   using Address for address;
 
   // Mapping from token ID to account balances
@@ -24,25 +78,17 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
   mapping(address => mapping(address => bool)) internal _operatorApprovals;
 
   // Returns tokenHolder index value for an address and a tokenID
-  // token owner's address => tokenID => tokenHolder[] index value
-  // Used by burn() and burnBatch() to avoid looping over tokenHolder[] arrays
+  // token owner's address => tokenID => tokenHolder[index] value
   mapping(address => mapping(uint256 => uint256)) public tokenHolderIndex;
 
-  // Restricts access to sensitive functions to only the owner(s) of this contract
-  // This is specified during deployment, and more owners can be added later
-  mapping(address => bool) internal isOwner;
+  // Maps tokenIDs to tokenHolders arrays
+  mapping(uint256 => address[]) internal tokenHolders;
 
   // Public array of all TokenProps structs created
-  // Newest tokenID is tokenProps.length
   TokenProps[] public tokenProps;
 
   /**
    * @dev Struct to track token properties.
-   *
-   * note I decided to include tokenID here since tokenID - 1 is needed for tokenProps[],
-   * which may get confusing. We can use the tokenID property to double-check that we
-   * are accessing the correct token's properties. It also looks and feels more intuitive
-   * as well for a struct that tells us everything we need to know about a tokenID.
    */
   struct TokenProps {
     uint256 tokenID; // ID of token
@@ -50,29 +96,134 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
     uint256 totalSupply; // Circulating/minted supply;
     uint256 supplyCap; // Max supply of tokens that can exist;
     bool isMintable; // Token can be minted;
-    address[] tokenHolders; // All holders of this token, if fungible
   }
 
   /**
    * @param _contractOwners Array of all operators that do not require approval to handle
-   * transferFrom() operations. Default is the Pazari Marketplace contract, but more operators
-   * can be passed in. Operators are mostly responsible for minting new tokens.
+   * transferFrom() operations and have isAdmin status. Initially, these addresses will
+   * only include the contract creator's wallet address (if using PazariMVP), and the
+   * addresses for Marketplace and PazariMVP. If contract creator was not using PazariMVP
+   * or any kind of isAdmin contract, then _contractOwners will include the contract's
+   * address instead of the user's wallet address. This is intentional for use with
+   * multi-sig contracts later.
    */
-  constructor(address[] memory _contractOwners) {
+  constructor(address[] memory _contractOwners) AccessControlPTMVP(_contractOwners) {
     super;
     for (uint256 i = 0; i < _contractOwners.length; i++) {
       _operatorApprovals[_msgSender()][_contractOwners[i]] = true;
-      isOwner[_contractOwners[i]] = true;
     }
   }
 
+  //***FUNCTIONS: ERC1155 MODIFIED & PAZARI***\\
+
   /**
-   * @dev Restricts access to the owner(s) of the contract
+   * @notice Checks multiple tokenIDs against a single address and returns an array of bools
+   * indicating ownership for each tokenID.
+   *
+   * @param _tokenIDs Array of tokenIDs to check ownership of
+   * @param _owner Wallet address being checked
    */
-  modifier onlyOwners() {
-    require(isOwner[_msgSender()], "Only contract owners permitted");
-    _;
+  function ownsToken(uint256[] memory _tokenIDs, address _owner) public view returns (bool[] memory) {
+    bool[] memory hasToken = new bool[](_tokenIDs.length);
+
+    for (uint256 i = 0; i < _tokenIDs.length; i++) {
+      uint256 tokenID = _tokenIDs[i];
+      if (balanceOf(_owner, tokenID) != 0) {
+        hasToken[i] = true;
+      } else {
+        hasToken[i] = false;
+      }
+    }
+    return hasToken;
   }
+
+  /**
+   * @dev External function that updates URI
+   *
+   * Only contract admins may update content URI
+   */
+  function setURI(string memory _newURI, uint256 _tokenID) external onlyAdmin {
+    _setURI(_newURI, _tokenID);
+  }
+
+  /**
+   * @dev Internal function that updates URI;
+   */
+  function _setURI(string memory _newURI, uint256 _tokenID) internal {
+    tokenProps[_tokenID - 1].uri = _newURI;
+  }
+
+  /**
+   * @notice Burns copies of a token from a token owner's address.
+   *
+   * @dev When an address has burned all of their tokens their address in
+   * that tokenID's tokenHolders array is set to address(0). However, their
+   * tokenHoldersIndex mapping is not removed, and can be used for checks.
+   */
+  function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
+    _burn(_msgSender(), _tokenID, _amount);
+    // After successful burn, if balanceOf == 0 then set tokenHolder address to address(0)
+    if (balanceOf(_msgSender(), _tokenID) == 0) {
+      tokenHolders[_tokenID][tokenHolderIndex[_msgSender()][_tokenID]] = address(0);
+    }
+    return true;
+  }
+
+  /**
+   * @dev Burns a batch of tokens from the caller's address.
+   *
+   * This can be called by anyone, and if they burn all of their tokens then
+   * their address in tokenOwners[tokenID] will be set to address(0). However,
+   * their tokenHolderIndex value will not be deleted, as it will be used to
+   * put them back on the list of tokenOwners if they receive another token.
+   */
+  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool) {
+    _burnBatch(_msgSender(), _tokenIDs, _amounts);
+    for (uint256 i = 0; i < _tokenIDs.length; i++) {
+      if (balanceOf(_msgSender(), _tokenIDs[i]) == 0) {
+        tokenHolders[_tokenIDs[i]][tokenHolderIndex[_msgSender()][_tokenIDs[i]]] = address(0);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * @dev Hook that is called before any token transfer. This includes minting
+   * and burning, as well as batched variants.
+   *
+   * @dev Pazari's variant checks to see if a recipient owns any tokens already,
+   * and if not then their address is added to a tokenHolders array. If they were
+   * previously a tokenHolder but burned all their tokens then their address is
+   * added back in to the token's tokenHolders array.
+   */
+  function _beforeTokenTransfer(
+    address,
+    address,
+    address recipient,
+    uint256[] memory tokenIDs,
+    uint256[] memory,
+    bytes memory
+  ) internal virtual {
+    // Get an array of bools for which tokenIDs recipient owns
+    bool[] memory hasTokens = ownsToken(tokenIDs, recipient);
+    // Iterate through array
+    for (uint256 i = 0; i < tokenIDs.length; i++) {
+      if (hasTokens[i] == false) {
+        // Run logic if recipient does not own a token
+        // If recipient was a tokenHolder before, then put them back in tokenHolders
+        if (tokenHolderIndex[recipient][tokenIDs[i]] != 0) {
+          tokenHolders[tokenIDs[i]][tokenHolderIndex[recipient][tokenIDs[i]]] = recipient;
+        }
+        // if not, then push recipient's address to tokenHolders, initialize tokenHolderIndex
+        else {
+          tokenHolderIndex[recipient][tokenIDs[i]] = tokenHolders[tokenIDs[i]].length;
+          tokenHolders[tokenIDs[i]].push(recipient);
+        }
+      }
+    }
+  }
+
+  //***FUNCTIONS: ERC1155 UNMODIFIED***\\
 
   /**
    * @dev See {IERC165-supportsInterface}.
@@ -145,22 +296,6 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
   }
 
   /**
-   * @dev External function that updates URI
-   *
-   * Only the contract owner(s) may update content URI
-   */
-  function setURI(string memory _newURI, uint256 _tokenID) external onlyOwners {
-    _setURI(_newURI, _tokenID);
-  }
-
-  /**
-   * @dev Internal function that updates URI;
-   */
-  function _setURI(string memory _newURI, uint256 _tokenID) internal {
-    tokenProps[_tokenID - 1].uri = _newURI;
-  }
-
-  /**
    * @dev See {IERC1155-safeBatchTransferFrom}.
    */
   function safeBatchTransferFrom(
@@ -174,6 +309,15 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
       from == _msgSender() || isApprovedForAll(from, _msgSender()),
       "ERC1155: transfer caller is not creator nor approved"
     );
+    // Require caller is an admin
+    // If caller is a contract with isAdmin, then user's wallet address is checked
+    // If caller is a contract without isAdmin, then contract's address is checked instead
+    require(isAdmin[_msgSender()], "PazariToken: Caller is not admin");
+    // If recipient is not admin, then sender needs to be admin
+    if (!isAdmin[to]) {
+      require(isAdmin[from], "PazariToken: Only admins may transfer");
+    }
+
     _safeBatchTransferFrom(from, to, ids, amounts, data);
   }
 
@@ -314,41 +458,6 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
   }
 
   /**
-   * @dev Burns copies of a token from a token owner's address.
-   *
-   * This can be called by anyone, and if they burn all of their tokens then
-   * their address in TokenProps.tokenHolders[] will be set to address(0). However,
-   * their tokenHolderIndex[] value will not be deleted, as it will be used to
-   * put them back on the list of tokenOwners if they receive another token.
-   */
-  function burn(uint256 _tokenID, uint256 _amount) external returns (bool) {
-    _burn(_msgSender(), _tokenID, _amount);
-    // After successful burn, if balanceOf == 0 then set tokenHolder address to address(0)
-    if (balanceOf(_msgSender(), _tokenID) == 0) {
-      tokenProps[_tokenID - 1].tokenHolders[tokenHolderIndex[_msgSender()][_tokenID]] = address(0);
-    }
-    return true;
-  }
-
-  /**
-   * @dev Burns a batch of tokens from the caller's address.
-   *
-   * This can be called by anyone, and if they burn all of their tokens then
-   * their address in tokenOwners[tokenID] will be set to address(0). However,
-   * their tokenHolderIndex value will not be deleted, as it will be used to
-   * put them back on the list of tokenOwners if they receive another token.
-   */
-  function burnBatch(uint256[] calldata _tokenIDs, uint256[] calldata _amounts) external returns (bool) {
-    _burnBatch(_msgSender(), _tokenIDs, _amounts);
-    for (uint256 i = 0; i < _tokenIDs.length; i++) {
-      if (balanceOf(_msgSender(), _tokenIDs[i]) == 0) {
-        tokenProps[_tokenIDs[i] - 1].tokenHolders[tokenHolderIndex[_msgSender()][_tokenIDs[i]]] = address(0);
-      }
-    }
-    return true;
-  }
-
-  /**
    * @dev Destroys `amount` tokens of token type `id` from `account`
    *
    * Requirements:
@@ -405,68 +514,6 @@ abstract contract Pazari1155 is Context, ERC165, IERC1155MetadataURI {
 
     emit TransferBatch(operator, account, address(0), ids, amounts);
     return true;
-  }
-
-  /**
-   * @notice Checks multiple tokenIDs against a single address and returns an array of bools
-   * indicating ownership for each tokenID.
-   *
-   * @param _tokenIDs Array of tokenIDs to check ownership of
-   * @param _owner Wallet address being checked
-   *
-   * @dev This seems like the most likely used function for token verification gimmicks. We
-   * probably won't need a function that checks multiple addresses against multiple tokenIDs
-   * for MVP, but I will create an external contract for these functions if we do.
-   */
-  function ownsToken(uint256[] memory _tokenIDs, address _owner) public view returns (bool[] memory) {
-    bool[] memory hasToken = new bool[](_tokenIDs.length);
-
-    for (uint256 i = 0; i < _tokenIDs.length; i++) {
-      uint256 tokenID = _tokenIDs[i];
-      if (balanceOf(_owner, tokenID) != 0) {
-        hasToken[i] = true;
-      } else {
-        hasToken[i] = false;
-      }
-    }
-    return hasToken;
-  }
-
-  /**
-   * @dev Hook that is called before any token transfer. This includes minting
-   * and burning, as well as batched variants.
-   *
-   * The same hook is called on both single and batched variants. For single
-   * transfers, the length of the `id` and `amount` arrays will be 1.
-   *
-   * Calling conditions (for each `id` and `amount` pair):
-   *
-   * - When `from` and `to` are both non-zero, `amount` of ``from``'s tokens
-   * of token type `id` will be  transferred to `to`.
-   * - When `from` is zero, `amount` tokens of token type `id` will be minted
-   * for `to`.
-   * - when `to` is zero, `amount` of ``from``'s tokens of token type `id`
-   * will be burned.
-   * - `from` and `to` are never both zero.
-   * - `ids` and `amounts` have the same, non-zero length.
-   *
-   * To learn more about hooks, head to xref:ROOT:extending-contracts.adoc#using-hooks[Using Hooks].
-   */
-  function _beforeTokenTransfer(
-    address,
-    address,
-    address to,
-    uint256[] memory ids,
-    uint256[] memory,
-    bytes memory
-  ) internal virtual {
-    bool[] memory tempBools = ownsToken(ids, to);
-    // If recipient does not own a token, then add their address to tokenHolders
-    for (uint256 i = 0; i < ids.length; i++) {
-      if (tempBools[i] == false) {
-        tokenProps[ids[i] - 1].tokenHolders.push(to);
-      }
-    }
   }
 
   function _doSafeTransferAcceptanceCheck(

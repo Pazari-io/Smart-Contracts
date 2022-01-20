@@ -4,22 +4,21 @@
  * Inherits from IERC1155MetadataURI, therefore all IERC1155 function
  * calls will work on a Pazari token. The IPazariTokenMVP interface
  * accesses the Pazari-specific functions of a Pazari token.
- *
- * Version 0.1.2:
- * - Added tokenID as a return value for createNewToken()
  */
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "../Dependencies/IERC1155MetadataURI.sol";
 
 interface IPazariTokenMVP is IERC1155MetadataURI {
-  // Fires when a recipient receives a tokenID from the airdropTokens() function
-  event TokenAirdropped(uint256 indexed tokenID, uint256 amount, address indexed recipient);
-
   // Fires when a new token is created through createNewToken()
   event TokenCreated(string URI, uint256 indexed tokenID, uint256 amount);
+
+  // Fires when more tokens are minted from a pre-existing tokenID
+  event TokensMinted(address indexed mintTo, uint256 indexed tokenID, uint256 amount);
+
+  // Fires when tokens are transferred via airdropTokens()
+  event TokensAirdropped(uint256 indexed tokenID, uint256 amount, uint256 timestamp);
 
   /**
    * @dev Struct to track token properties.
@@ -31,43 +30,14 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
     bool isMintable; // Mintability: Token can be minted;
   }
 
-  /**
-   * @dev Accesses the tokenIDs[] array
-   *
-   * note _index = tokenID - 1
-   */
-  function tokenIDs(uint256 _index) external view returns (TokenProps memory);
+  //***FUNCTIONS: SETTERS***\\
 
   /**
-   * @dev Returns an array of all holders of a _tokenID
+   * @dev This implementation returns the URI stored for any _tokenID,
+   * overwrites ERC1155's uri() function while maintaining compatibility
+   * with OpenSea's standards.
    */
-  function tokenHolders(uint256 _tokenID) external view returns (address[] memory);
-
-  /**
-   * @notice Returns an address's index value in a token's tokenHolders[] array property.
-   *
-   * @dev Not really needed for front-end. This is just a mapping that tells you where an address
-   * is inside a token's tokenHolders[] array. If it returns 0, then that address is not a holder,
-   * since tokenHolders[0] == address(0) for all tokens.
-   */
-  function tokenHolderIndex(address _owner, uint256 _tokenID) external view returns (uint256 index);
-
-  /**
-   * @notice Performs an airdrop for multiple tokens to many recipients
-   *
-   * @dev NOT USED FOR MVP
-   *
-   * @param _tokenIDs Array of all tokenIDs being airdropped
-   * @param _amounts Array of all amounts of each tokenID to drop to each recipient
-   * @param _recipients Array of all recipients for the airdrop
-   *
-   * @dev Emits TokenAirdropped event
-   */
-  function airdropTokens(
-    uint256[] memory _tokenIDs,
-    uint256[] memory _amounts,
-    address[] memory _recipients
-  ) external returns (bool);
+  function uri(uint256 _tokenID) external view returns (string memory);
 
   /**
    * @dev Creates a new Pazari Token
@@ -114,6 +84,21 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
   ) external returns (bool);
 
   /**
+   * @notice Performs an airdrop for multiple tokens to many recipients
+   *
+   * @param _tokenIDs Array of all tokenIDs being airdropped
+   * @param _amounts Array of all amounts of each tokenID to drop to each recipient
+   * @param _recipients Array of all recipients for the airdrop
+   *
+   * @dev Emits TokenAirdropped event
+   */
+  function airdropTokens(
+    uint256[] memory _tokenIDs,
+    uint256[] memory _amounts,
+    address[] memory _recipients
+  ) external returns (bool);
+
+  /**
    * @dev Burns _amount copies of a _tokenID (NOT NEEDED FOR MVP)
    */
   function burn(uint256 _tokenID, uint256 _amount) external returns (bool);
@@ -128,19 +113,7 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
    */
   function setURI(string memory _newURI, uint256 _tokenID) external;
 
-  /**
-   * @notice Adds new owner addresses, only owners can call
-   *
-   * @dev Emits OwnerAdded event for each address added
-   *
-   * @dev Owners can pass the onlyOwners modifier, so be careful with who we add.
-   * This function is intended as a backdoor so we can add new smart contracts in
-   * the future that can access restricted functions, while also eliminating
-   * operator approval for transferFrom(). This exposes some obvious attack
-   * vectors that need to be avoided when/if this function is implemented on
-   * the front-end.
-   */
-  function addOwners(address[] memory _newOwners) external;
+  //***FUNCTIONS: GETTERS***\\
 
   /**
    * @notice Checks multiple tokenIDs against a single address and returns an array of bools
@@ -148,9 +121,44 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
    *
    * @param _tokenIDs Array of tokenIDs to check ownership of
    * @param _owner Wallet address being checked
+   * @return bool[] Array of mappings where true means the _owner has at least one tokenID
    */
   function ownsToken(uint256[] memory _tokenIDs, address _owner) external view returns (bool[] memory);
 
-  // Not sure if we need this or not
-  function supportsInterface(bytes4 interfaceId) external view override returns (bool);
+  /**
+   * @notice Returns TokenProps struct
+   *
+   * @dev Only available to token contract admins
+   */
+  function getTokenProps(uint256 tokenID) external view returns (TokenProps memory);
+
+  /**
+   * @notice Returns an array of all holders of a _tokenID
+   *
+   * @dev Only available to token contract admins
+   */
+  function getTokenHolders(uint256 _tokenID) external view returns (address[] memory);
+
+  /**
+   * @notice Returns tokenHolderIndex value for an address and a tokenID
+   * @dev All this does is returns the location of an address inside a tokenID's tokenHolders
+   */
+  function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID) external view returns (uint256);
+}
+
+interface IAccessControlPTMVP {
+  // Accesses isAdmin mapping
+  function isAdmin(address _adminAddress) external view returns (bool);
+
+  /**
+   * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
+   * for everything else. See PaymentRouter for more details.
+   */
+  function _msgSender() external view returns (address);
+
+  // Adds an address to isAdmin mapping
+  function addAdmin(address _newAddress) external returns (bool);
+
+  // Removes an address from isAdmin mapping
+  function removeAdmin(address _oldAddress) external returns (bool);
 }

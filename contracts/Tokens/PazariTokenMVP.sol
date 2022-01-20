@@ -6,28 +6,10 @@
  * tokens, and are used for ownership verification after a file
  * has been purchased.
  *
- * Because these are 1155 tokens, creators can mint fungible and
- * non-fungible tokens, depending upon the item they wish to sell.
- * However, they are not transferrable to anyone who isn't an
- * owner of the contract. These tokens are pseudo-NFTs.
- *
- *  start at 1 instead of 0. TokenID 0 can be used for
- * existence checking.
- *
- * All tokenHolders are tracked inside of each tokenID's TokenProps,
- * which makes airdrops much easier to accommodate.
- *
- * For ownsToken() and airdropToken() I created three overloaded
- * designs for these functions. We can only use one design of each
- * function due to contract size limits in the factory.
- * - I intend to move the airdropping functionality to a new
- *   utility contract that can be cloned by sellers who wish
- *   to use it. This contract is already on the edge of its
- *   size limits, so we need to figure out which functions
- *   can be offloaded to an external contract before we
- *   deploy the official MVP.
+ * Pazari uses ERC1155 tokens so it can possess immediate support
+ * for ERC1155 NFTs, and the PazariToken is a modified ERC1155
+ * with limited transfer capabilities.
  */
-
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.0;
@@ -36,7 +18,6 @@ import "../Dependencies/IERC1155.sol";
 import "../Dependencies/IERC1155Receiver.sol";
 import "../Dependencies/IERC1155MetadataURI.sol";
 import "../Dependencies/Address.sol";
-import "../Dependencies/Context.sol";
 import "../Dependencies/ERC165.sol";
 import "../Dependencies/Ownable.sol";
 import "../Marketplace/Marketplace.sol";
@@ -52,47 +33,40 @@ contract PazariTokenMVP is Pazari1155 {
   // Fires when more tokens are minted from a pre-existing tokenID
   event TokensMinted(address indexed mintTo, uint256 indexed tokenID, uint256 amount);
 
-  // Fires when a contract owner adds a new owner to the contract
-  event OwnerAdded(address indexed newOwner, address indexed tokenContract);
+  // Fires when tokens are transferred via airdropTokens()
+  event TokensAirdropped(uint256 indexed tokenID, uint256 amount, uint256 timestamp);
 
+  /**
+   * @param _contractOwners Array of all addresses that have operator approval and
+   * isAdmin status.
+   */
   constructor(address[] memory _contractOwners) Pazari1155(_contractOwners) {}
 
   /**
-   * @dev Checks if _tokenID is mintable or not:
-   * True = Standard Edition, can be minted -- supplyCap == 0 (DEFAULT)
-   * False = Limited Edition, cannot be minted -- supplyCap >= totalSupply
+   * @notice Returns TokenProps struct, only admins can call
    */
-  modifier isMintable(uint256 _tokenID) {
-    require(tokenProps[_tokenID - 1].isMintable, "Minting disabled");
-    _;
+  function getTokenProps(uint256 _tokenID) public view onlyAdmin returns (TokenProps memory) {
+    return tokenProps[_tokenID - 1];
   }
 
   /**
-   * @notice Adds new owner addresses, only owners can call
-   *
-   * @dev Emits OwnerAdded event for each address added
-   *
-   * @dev All owners can call transferFrom() without operator approval, and they can
-   * add new owners to the contract. This should ideally *never* be used for wallet
-   * addresses, and should be limited to Pazari smart contracts. The only exception
-   * is if a seller wants to share a token contract with a co-creator that they trust.
-   *
-   * @dev This function exposes an attack vector if the wrong address is provided.
+   * Returns tokenHolders array for tokenID, only admins can call
    */
-  function addOwners(address[] memory _newOwners) external onlyOwners {
-    for (uint256 i = 0; i < _newOwners.length; i++) {
-      address newOwner = _newOwners[i];
-      _operatorApprovals[msg.sender][newOwner] = true;
-      isOwner[newOwner] = true;
-      emit OwnerAdded(newOwner, address(this));
-    }
+  function getTokenHolders(uint256 _tokenID) public view onlyAdmin returns (address[] memory) {
+    return tokenHolders[_tokenID];
   }
 
   /**
-   * @dev Returns an array of all holders of a _tokenID
+   * @notice Returns tokenHolderIndex value for an address and a tokenID
+   * @dev All this does is returns the location of an address inside a tokenID's tokenHolders
    */
-  function tokenHolders(uint256 _tokenID) external view returns (address[] memory) {
-    return tokenProps[_tokenID - 1].tokenHolders;
+  function getTokenHolderIndex(address _tokenHolder, uint256 _tokenID)
+    public
+    view
+    onlyAdmin
+    returns (uint256)
+  {
+    return tokenHolderIndex[_tokenHolder][_tokenID];
   }
 
   /**
@@ -108,7 +82,7 @@ contract PazariTokenMVP is Pazari1155 {
     uint256 _amount,
     uint256 _supplyCap,
     bool _isMintable
-  ) external onlyOwners returns (uint256) {
+  ) external onlyAdmin returns (uint256) {
     uint256 tokenID;
     // If _amount == 0, then supply is infinite
     if (_amount == 0) {
@@ -133,21 +107,21 @@ contract PazariTokenMVP is Pazari1155 {
     uint256 _amount,
     uint256 _supplyCap
   ) internal returns (uint256 tokenID) {
-    address[] memory emptyTokenHoldersArray;
-    TokenProps memory newToken = TokenProps(
-      tokenProps.length + 1,
-      _newURI,
-      _amount,
-      _supplyCap,
-      _isMintable,
-      emptyTokenHoldersArray
-    );
+    // The zeroth tokenHolder is address(0)
+    tokenHolderIndex[address(0)][tokenID] = 0;
+    tokenHolders[tokenID].push(address(0));
+
+    tokenID = tokenProps.length;
+    // Create new TokenProps and push to tokenProps array
+    TokenProps memory newToken = TokenProps(tokenProps.length, _newURI, _amount, _supplyCap, _isMintable);
     tokenProps.push(newToken);
+    // Grab tokenID from newToken's struct
     tokenID = newToken.tokenID;
 
-    require(_mint(_msgSender(), newToken.tokenID, _amount, ""), "Minting failed");
+    // Mint tokens to _msgSender()
+    require(_mint(_msgSender(), tokenID, _amount, ""), "Minting failed");
 
-    emit TokenCreated(_newURI, newToken.tokenID, _amount);
+    emit TokenCreated(_newURI, tokenID, _amount);
   }
 
   /**
@@ -161,7 +135,7 @@ contract PazariTokenMVP is Pazari1155 {
     bool[] calldata _isMintable,
     uint256[] calldata _amounts,
     uint256[] calldata _supplyCaps
-  ) external onlyOwners returns (bool) {
+  ) external onlyAdmin returns (bool) {
     // Check that all arrays are same length
     require(
       _newURIs.length == _isMintable.length &&
@@ -200,9 +174,10 @@ contract PazariTokenMVP is Pazari1155 {
     uint256 _amount,
     string memory,
     bytes memory
-  ) external onlyOwners isMintable(_tokenID) returns (bool) {
+  ) external onlyAdmin returns (bool) {
     TokenProps memory tokenProperties = tokenProps[_tokenID - 1];
     require(tokenProperties.totalSupply > 0, "Token does not exist");
+    require(tokenProps[_tokenID - 1].isMintable, "Minting disabled");
     if (tokenProperties.supplyCap != 0) {
       // Check that new amount does not exceed the supply cap
       require(tokenProperties.totalSupply + _amount <= tokenProperties.supplyCap, "Amount exceeds cap");
@@ -224,17 +199,18 @@ contract PazariTokenMVP is Pazari1155 {
     uint256[] memory _tokenIDs,
     uint256[] memory _amounts,
     address[] memory _recipients
-  ) external onlyOwners returns (bool) {
+  ) external onlyAdmin returns (bool) {
     require(_amounts.length == _tokenIDs.length, "Amounts and tokenIds must be same length");
     uint256 i; // TokenID and amount counter
     uint256 j; // Recipients counter
-    // Iterate through each tokenID:
+    // Iterate through each tokenID being airdropped:
     for (i = 0; i < _tokenIDs.length; i++) {
       require(balanceOf(_msgSender(), _tokenIDs[i]) >= _recipients.length, "Not enough tokens for airdrop");
       // Iterate through recipients, transfer tokenID if recipient != address(0)
+      // See burn() for why some addresses in tokenHolders may be address(0)
       for (j = 0; j < _recipients.length; j++) {
         if (_recipients[j] == address(0)) continue;
-        // Skip address(0)
+        // If found, then skip address(0)
         else _safeTransferFrom(_msgSender(), _recipients[j], _tokenIDs[i], _amounts[i], "");
       }
     }
@@ -244,6 +220,18 @@ contract PazariTokenMVP is Pazari1155 {
   /**
    * @dev Overridden ERC1155 function, requires that the caller of the function
    * is an owner of the contract.
+   *
+   * @dev Transfers should only work for isAdmin => isAdmin and for isAdmin => !isAdmin,
+   * but not for !isAdmin => !isAdmin. Only admins are allowed to transfer these tokens
+   * to non-admins.
+   *
+   * @dev The logic gives instruction for when recipient is not admin but sender is, which
+   * is permitted freely. This is like a store selling an item to someone. What is also
+   * implied by this condition is that it is acceptable for recipients to transfer their
+   * PazariTokens back to the sender/admin, which would happen during a refund. What is
+   * also implied is that it is not acceptable for recipients to transfer their PazariTokens
+   * to anyone else. These tokens are attached to downloadable content, and should NOT be
+   * transferrable to non-admin addresses to protect the content.
    */
   function safeTransferFrom(
     address from,
@@ -252,7 +240,10 @@ contract PazariTokenMVP is Pazari1155 {
     uint256 amount,
     bytes memory data
   ) external virtual override {
-    require(isOwner[from], "PazariToken: Caller is not an owner");
+    // If recipient is not admin, then sender needs to be admin
+    if (!isAdmin[to]) {
+      require(isAdmin[from], "PazariToken: Only admins may send PazariTokens to non-admins");
+    }
     _safeTransferFrom(from, to, id, amount, data);
   }
 
