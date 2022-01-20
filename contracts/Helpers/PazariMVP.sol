@@ -142,9 +142,9 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     iERC20 = IERC20(_stablecoin);
     iFactoryPazariTokenMVP = FactoryPazariTokenMVP(_factory);
     // Push Pazari core addresses to admins
-    admins.push(address(iMarketplace));
-    admins.push(address(iPaymentRouter));
-    admins.push(address(iFactoryPazariTokenMVP));
+    admins.push(_market);
+    admins.push(_paymentRouter);
+    admins.push(_factory);
     admins.push(address(this));
   }
 
