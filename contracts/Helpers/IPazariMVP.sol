@@ -4,34 +4,63 @@ pragma solidity ^0.8.0;
 interface IPazariMVP {
   // Fires when a new token is listed for sale
   event NewTokenListed(
-    address indexed itemOwner,
-    uint256 itemID,
-    uint256 indexed price,
+    uint256 indexed itemID,
     address indexed tokenContract,
+    uint256 price,
     uint256 tokenID,
-    uint256 amount
+    uint256 amount,
+    string uri,
+    address indexed sender
   );
 
   // Fires when a new user joins and lists an item
   event NewUserCreated(
-    address userAddress,
-    bytes32 routeID,
-    address tokenContractAddress,
-    uint256 itemID,
+    address indexed userAddress, 
+    bytes32 routeID, 
+    address tokenContractAddress, 
     uint256 timestamp
   );
 
-  // Fires after a token contract is cloned
+  /**
+   * @notice Fires when a new PazariTokenMVP contract is cloned
+   *
+   * @param contractID Unique identifier for the contract created
+   * @param contractType Number representing type of contract created (see below)
+   * @param creatorAddress Address of contract's creator
+   * @param factoryAddress Address of factory that created the contract
+   * @param cloneAddress Address of cloned token contract
+   * @param timestamp Block timestamp when contract was created
+   *
+   * @dev All ContractCloned events from PazariMVP will have contractType = 0,
+   * so it is not indexed. Instead, we can filter by contractID, creator's
+   * address, and the factory's address.
+   */
   event ContractCloned(
-    uint256 contractID,
-    uint16 indexed contractType,
+    uint256 indexed contractID,
+    uint16 contractType,
     address indexed creatorAddress,
-    address indexed factoryAddress,
-    address cloneAddress,
+    address factoryAddress,
+    address indexed cloneAddress,
     uint256 timestamp
   );
 
-  // Created for everyone who runs newUser()
+  // Fires when admin recovers lost NFT(s)
+  event NFTRecovered(
+    address indexed tokenContract, 
+    uint256 indexed tokenID, 
+    address recipient, 
+    address indexed admin, 
+    string memo, 
+    uint256 timestamp
+  );
+
+  /**
+   * @notice General information about a user's profile
+   * @param userAddress User's address, determined by _msgSender()
+   * @param tokenContract Address of PazariTokenMVP contract associated with user profile
+   * @param routeID Bytes32 ID of user's PaymentRoute
+   * @param itemIDs Array of all itemIDs created by this user
+   */
   struct UserProfile {
     address userAddress;
     address tokenContract;
@@ -55,11 +84,14 @@ interface IPazariMVP {
   }
 
   /**
-   * @notice Creates a new token and lists it on the Pazari Marketplace.  Will create a new contract if this is a new user.
-   * @return tokenID The tokenID and itemID of the new token listed
+   * @notice Creates a new token and lists it on the Pazari Marketplace.
+   * @dev If user does not have a profile yet, then one is created and
+   * a new token contract is cloned and deployed.
    *
-   * @dev Assumes the seller is using the same PaymentRoute and token contract
-   * created in newUser().
+   * @param _URI URL to token's public metadata
+   * @param _amount Amount of tokens to mint and list
+   * @param _price Listing price per token
+   * @return tokenID The tokenID and itemID of the new token listed
    *
    * @dev Emits NewTokenListed event
    */
@@ -70,8 +102,9 @@ interface IPazariMVP {
   ) external returns (uint256 tokenID, uint256 itemID);
 
   /**
-   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
-   * @dev Only PazariMVP admins can call this function, and is the only function they can call.
+   * @notice This is in case someone mistakenly sends their ERC1155
+   * NFT to this contract address
+   * @dev Only PazariMVP admins can call this function
    */
   function recoverNFT(
     address _nftContract,
@@ -92,14 +125,50 @@ interface IPazariMVP {
    * one MarketItem struct.
    */
   function getMarketItem(uint256 _itemID) external view returns (MarketItem memory);
+
+  // Accesses itemIDs array of all itemIDs created through PazariMVP
+  function itemIDs(uint256 _index) external view returns (uint256 itemID);
+
+  // Accesses deployedContracts array of all cloned token contracts created by PazariMVP
+  function deployedContracts(uint256 _index) external view returns (address contractAddress);
 }
 
+
 interface IAccessControlPMVP {
+  // Fires when Pazari admins are added/removed
+  event AdminAdded(
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
+  event AdminRemoved(
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
+
+  // Accesses isAdmin mapping, only Pazari admins will have isAdmin for PazariMVP
   function isAdmin(address _userAddress) external view returns (bool);
 
+  /**
+   * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
+   * for everything else. See IPaymentRouter for more details.
+   */
   function _msgSender() external view returns (address);
 
-  function addAdmin(address _newAddress, string memory _memo) external returns (bool);
-
-  function removeAdmin(address _oldAddress, string memory _memo) external returns (bool);
+  /**
+   * @notice Adds or removes an address as an admin
+   * @dev Only admins or admin contracts operated by admins can call these functions
+   *
+   * @param _newAddress/_oldAddress Address being added/removed to/from isAdmin
+   * @param _memo Optional admin's note emitted by event
+   * @return bool Success bool
+   *
+   * @dev Emits AdminAdded event when address is given isAdmin
+   * @dev Emits AdminRemoved event when isAdmin is taken away from an address
+   */
+  function addAdmin(address _newAddress, string calldata _memo) external returns (bool);
+  function removeAdmin(address _oldAddress, string calldata _memo) external returns (bool);
 }
