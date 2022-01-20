@@ -77,6 +77,7 @@ contract AccessControlMP {
       isAdmin[_adminAddresses[i]] = true;
     }
     msgSender = address(this);
+    status = notEntered;
   }
 
   /**
