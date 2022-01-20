@@ -1,11 +1,4 @@
-/**
- * @dev All MVP default values are specified in comments. These are the values that
- * the front-end should give to the contract for the Pazari MVP. After the MVP we
- * can begin building out the rest of the functions.
- */
-
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.0;
 
 interface IMarketplace {
@@ -87,13 +80,15 @@ interface IMarketplace {
   ) external returns (uint256 itemID);
 
   /**
-   * @notice Overloaded function that takes less parameters
-   * @dev Assumes the following values:
-   * - isPush = true
-   * - forSale = true
-   * - itemLimit = 1
-   * - routeMutable = false
-   * @return itemID The itemID of the new MarketItem
+   * @notice Lighter overload of createMarketItem
+   *
+   * @param _tokenContract Token contract address of the item being sold
+   * @param _tokenID The token contract ID of the item being sold
+   * @param _amount The amount of items available for purchase (MVP: 0)
+   * @param _price The price--in payment tokens--of the item being sold
+   * @param _paymentContract Contract address of token accepted for payment (MVP: stablecoin)
+   * @param _routeID The routeID of the payment route assigned to this item
+   * @return itemID ItemID of the market item
    */
   function createMarketItem(
     address _tokenContract,
@@ -111,7 +106,8 @@ interface IMarketplace {
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
    *
-   * @dev Emits ItemSoldOut when last item is bought and MarketItemSold for every purchase
+   * @dev Emits ItemSoldOut event when last item is bought 
+   * @dev Emits MarketItemSold event for every purchase
    *
    * @dev Providing _amount == 0 will purchase the item's full itemLimit, which
    * for most items will be 1
@@ -171,39 +167,52 @@ interface IMarketplace {
    * forSale will be returned by getInStockItems().
    *
    * @param _itemID Marketplace ID of item for sale
-   * @return forSale True = item was reactivated, false = item was deactivated
+   * @return forSale True = item reactivated, false = item deactivated
+   *
+   * @dev Emits ForSaleToggled event
    */
   function toggleForSale(uint256 _itemID) external returns (bool forSale);
 
   /**
-   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
-   * @dev If tokenID is a MarketItem, then it will only send back the excess tokens not accounted
-   * for by MarketItem.amount.
+   * @notice Deletes a MarketItem, setting all its properties to default values
+   * @dev Does not remove itemID or the entry in marketItems, just sets properties to default
+   * and removes tokenMap mappings. This frees up the tokenID to be used in a new MarketItem.
+   * @dev Only the itemCreator or a Pazari admin can call this function
    *
-   * @param _nftContract Contract address of NFT to recover
-   * @param _tokenID Token ID of the NFT to recover
-   * @param _amount Amount of tokens to recover
+   * @dev Emits MarketItemDeleted event
+   */
+  function deleteMarketItem(uint256 _itemID) external returns (bool);
+
+  /**
+   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
+   * @dev Requires both tx.origin and msg.sender be admins
+   *
+   * @param _nftContract Contract address of NFT being recovered
+   * @param _tokenID Token ID of NFT
+   * @param _amount Amount of NFTs to recover
+   * @param _recipient Where the NFTs are going
+   * @param _memo Any notes the admin wants to include in the event
+   * @return bool Success bool
+   *
+   * @dev Emits NFTRecovered event
    */
   function recoverNFT(
     address _nftContract,
     uint256 _tokenID,
-    uint256 _amount
+    uint256 _amount,
+    address _recipient,
+    string calldata _memo
   ) external returns (bool);
 
   //***FUNCTIONS: GETTERS***\\
 
   /**
    * @notice Directly accesses the marketItems[] array
+   * 
+   * @param _index Array index position, _index = itemID - 1
    * @return MarketItem MarketItem struct stored at _index
-   *
-   * @dev _index = itemID - 1
    */
   function marketItems(uint256 _index) external view returns (MarketItem memory);
-
-  /**
-   * @notice Returns an array of all items for sale on marketplace
-   */
-  function getItemsForSale() external view returns (MarketItem[] memory);
 
   /**
    * @notice Getter function for all itemIDs with forSale.
@@ -216,8 +225,10 @@ interface IMarketplace {
   function getMarketItems(uint256[] memory _itemIDs) external view returns (MarketItem[] memory marketItems_);
 
   /**
-   * @notice Returns an array of MarketItems created the seller's address
-   * @dev No restrictions for calling this
+   * @notice Returns an array of MarketItems created by the seller's address
+   * @dev Used for displaying seller's items for mini-shops on seller profiles
+   * @dev There is no way to remove items from this array, and deleted itemIDs will still show,
+   * but will have nonexistent item details.
    */
   function getSellersMarketItems(address _sellerAddress) external view returns (uint256[] memory);
 
@@ -241,29 +252,49 @@ interface IMarketplace {
  * @dev Not needed for MVP, but they're here if needed
  */
 interface IAccessControlMP {
-  // Fires when admins are added or removed
-  event AdminAdded(address newAdmin, address adminAuthorized, string memo, uint256 timestamp);
-  event AdminRemoved(address oldAdmin, address adminAuthorized, string memo, uint256 timestamp);
+  // Fires when Pazari admins are added/removed
+  event AdminAdded(
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
+  event AdminRemoved(
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
   // Fires when item admins are added or removed
   event ItemAdminAdded(
-    uint256 itemID,
-    address newAdmin,
-    address adminAuthorized,
+    uint256 indexed itemID,
+    address indexed newAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
   event ItemAdminRemoved(
-    uint256 itemID,
-    address oldAdmin,
-    address adminAuthorized,
+    uint256 indexed itemID,
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
 
   // Fires when an address is blacklisted/whitelisted from the Pazari Marketplace
-  event AddressBlacklisted(address blacklistedAddress, address adminAddress, string memo, uint256 timestamp);
-  event AddressWhitelisted(address whitelistedAddress, address adminAddress, string memo, uint256 timestamp);
+  event AddressBlacklisted(
+    address indexed blacklistedAddress,
+    address indexed adminAddress,
+    string memo,
+    uint256 timestamp
+  );
+  event AddressWhitelisted(
+    address indexed whitelistedAddress,
+    address indexed adminAddress,
+    string memo,
+    uint256 timestamp
+  );
 
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
@@ -283,29 +314,74 @@ interface IAccessControlMP {
   // Accesses itemCreator mapping
   function itemCreator(uint256 _itemID) external view returns (address itemCreator);
 
-  // Adds an address to isAdmin mapping
-  function addAdmin(address _newAddress, string memory _memo) external returns (bool);
+  /**
+   * @notice Adds an address to isAdmin mapping 
+   * @dev Only admins and admin contracts operated by admins may call
+   * 
+   * @param _newAddress Address being added
+   * @param _memo Optional message to include in event emission
+   * @return bool Success bool
+   *
+   * @dev Emits AdminAdded event
+   */
+  function addAdmin(address _newAddress, string calldata _memo) external returns (bool);
 
-  // Removes an address from isAdmin mapping
-  function removeAdmin(address _oldAddress, string memory _memo) external returns (bool);
+  /**
+   * @notice Removes an address from isAdmin mapping 
+   * @dev Only admins and admin contracts operated by admins may call
+   * 
+   * @param _oldAddress Address being removed
+   * @param _memo Optional message to include in event emission
+   * @return bool Success bool
+   *
+   * @dev Emits AdminRemoved event
+   */
+  function removeAdmin(address _oldAddress, string calldata _memo) external returns (bool);
 
-  // Adds an address to isItemAdmin mapping
+  /**
+   * @notice Adds an address to isItemAdmin mapping  
+   * @dev Only admins and itemAdmins may call
+   * 
+   * @param _newAddress Address being added
+   * @param _itemID Marketplace itemID of MarketItem
+   * @param _memo Optional message to include in event emission
+   * @return bool Success bool
+   *
+   * @dev Emits ItemAdminAdded event
+   */
   function addItemAdmin(
     uint256 _itemID,
     address _newAddress,
-    string memory _memo
-  ) external returns (bool);
-
-  // Removes an address from isItemAdmin mapping
-  function removeItemAdmin(
-    uint256 _itemID,
-    address _oldAddress,
-    string memory _memo
+    string calldata _memo
   ) external returns (bool);
 
   /**
-   * @notice Toggles isBlacklisted for an address. Can only be called by Pazari
-   * Marketplace admins.
+   * @notice Removes an address from isItemAdmin mapping 
+   * @dev Only admins and itemAdmins may call
+   * 
+   * @param _oldAddress Address being removed
+   * @param _itemID Marketplace itemID of MarketItem
+   * @param _memo Optional message to include in event emission
+   * @return bool Success bool
+   *
+   * @dev Emits ItemAdminRemoved event
    */
-  function toggleBlacklist(address _listedAddress, string memory _memo) external returns (bool);
+  function removeItemAdmin(
+    uint256 _itemID,
+    address _oldAddress,
+    string calldata _memo
+  ) external returns (bool);
+
+  /**
+   * @notice Toggles isBlacklisted for an address
+   * @dev Only Pazari admins and admin contracts operated by admins can call
+   *
+   * @param _userAddress Address being black/whitelisted
+   * @param _memo Optional message to emit in event
+   * @return bool Success bool
+   *
+   * @dev Emits AddressBlacklisted event if address has isBlacklisted
+   * @dev Emits AddressWhitelisted event if address has !isBlacklisted
+   */
+  function toggleBlacklist(address _userAddress, string calldata _memo) external returns (bool);
 }
