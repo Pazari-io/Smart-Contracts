@@ -22,6 +22,13 @@ contract AccessControlMP {
   // Maps itemID to the address that created it
   mapping(uint256 => address) public itemCreator;
 
+  // Used by noReentrantCalls
+  address internal msgSender;
+  uint256 private constant notEntered = 1;
+  uint256 private constant entered = 2;
+  uint256 private status;
+
+
   // Fires when admins are added or removed
   event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
@@ -65,6 +72,7 @@ contract AccessControlMP {
     for (uint256 i = 0; i < _adminAddresses.length; i++) {
       isAdmin[_adminAddresses[i]] = true;
     }
+    msgSender = address(this);
   }
 
   /**
@@ -181,7 +189,23 @@ contract AccessControlMP {
     );
     _;
   }
+
+  /**
+   * @notice Provides defense against reentrancy calls
+   * @dev msgSender is only used to avoid needless function calls, and
+   * isn't part of the reentrancy guard. It is set back to this address
+   * after every use to refund some of the gas spent on it.
+   */
+  modifier noReentrantCalls() {
+    require(status == notEntered, "Reentrancy not allowed");
+    status = entered;
+    msgSender = _msgSender();
+    _;
+    msgSender = address(this);
+    status = notEntered;
+  }
 }
+
 
 contract Marketplace is ERC1155Holder, AccessControlMP {
   using Counters for Counters.Counter;
@@ -223,6 +247,16 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bool isPush,
     bytes32 routeID,
     uint256 itemLimit
+  );
+
+  // Fires when admin recovers lost NFT(s)
+  event NFTRecovered(
+    address indexed tokenContract, 
+    uint256 indexed tokenID, 
+    address recipient, 
+    address indexed admin, 
+    string memo, 
+    uint256 timestamp
   );
 
   // Maps a seller's address to an array of all itemIDs they have created
@@ -298,7 +332,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bytes32 _routeID,
     uint256 _itemLimit,
     bool _routeMutable
-  ) external noBlacklist returns (uint256 itemID) {
+  ) external noReentrantCalls noBlacklist returns (uint256 itemID) {
     /* ========== CHECKS ========== */
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_paymentContract != address(0), "Invalid payment token contract address");
@@ -355,7 +389,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     uint256 _price,
     address _paymentContract,
     bytes32 _routeID
-  ) external noBlacklist returns (uint256 itemID) {
+  ) external noReentrantCalls noBlacklist returns (uint256 itemID) {
     /* ========== CHECKS ========== */
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_paymentContract != address(0), "Invalid payment token contract address");
@@ -467,14 +501,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount)
     external
+    noReentrantCalls
     noBlacklist
     itemExists(_itemID)
     returns (bool)
   {
     // Pull data from itemID's MarketItem struct
     MarketItem memory item = marketItems[_itemID - 1];
-    uint256 balance = IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID);
     uint256 itemLimit = item.itemLimit;
+    uint256 balance = IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID);
+    uint256 initBuyersBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
+    uint256 initMarketBalance = IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID);
 
     // Define total cost of purchase
     uint256 totalCost = item.price * _amount;
@@ -531,7 +568,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Call market item's token contract and transfer token from Marketplace to buyer
     IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
-    //assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
+    // Check that balances updated correctly on both sides
+    assert( // Marketplace should be - _amount
+      IERC1155(item.tokenContract)
+      .balanceOf(address(this), item.tokenID) == initMarketBalance - _amount
+    );
+    assert( // Buyer should be + _amount
+      IERC1155(item.tokenContract)
+      .balanceOf(msgSender, item.tokenID) == initBuyersBalance + _amount
+    );
+
+    emit MarketItemSold(item.itemID, _amount, msgSender);
     return true;
   }
 
@@ -546,13 +593,17 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    */
   function restockItem(uint256 _itemID, uint256 _amount)
     external
+    noReentrantCalls
     noBlacklist
     onlyItemAdmin(_itemID)
     itemExists(_itemID)
     returns (bool)
   {
-    /* ========== CHECKS ========== */
     MarketItem memory item = marketItems[_itemID - 1];
+    uint256 initBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
+    uint256 initMarketBalance = IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID);
+
+    /* ========== CHECKS ========== */
     require(
       IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID) >= _amount,
       "Insufficient token balance"
@@ -571,8 +622,14 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== INTERACTIONS ========== */
     IERC1155(item.tokenContract).safeTransferFrom(_msgSender(), address(this), item.tokenID, _amount, "");
 
-    assert(
-      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == marketItems[_itemID - 1].amount
+    // Check that balances updated correctly on both sides
+    assert( // Marketplace should be + _amount
+      IERC1155(item.tokenContract)
+      .balanceOf(address(this), item.tokenID) == initMarketBalance + _amount
+    );
+    assert( // Marketplace should be - _amount
+      IERC1155(item.tokenContract)
+      .balanceOf(msgSender, item.tokenID) == initBalance - _amount
     );
     emit ItemRestocked(_itemID, _amount);
     return true;
@@ -588,14 +645,18 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    */
   function pullStock(uint256 _itemID, uint256 _amount)
     external
+    noReentrantCalls
     noBlacklist
     onlyItemAdmin(_itemID)
     itemExists(_itemID)
     returns (bool)
   {
+    MarketItem memory item = marketItems[_itemID - 1];
+    uint256 initMarketBalance = item.amount;
+    uint256 initSellerBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
+
     /* ========== CHECKS ========== */
     // Store initial values
-    MarketItem memory item = marketItems[_itemID - 1];
     require(item.amount >= _amount, "Not enough inventory to pull");
 
     // Pulls all remaining tokens if _amount == 0, sets forSale to false
@@ -611,10 +672,15 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== INTERACTIONS ========== */
     IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
-    emit ItemPulled(_itemID, _amount);
+    // Check that balances updated correctly on both sides
+    assert( // Marketplace should be - _amount
+      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == initMarketBalance - _amount
+    );
+    assert( // Seller should be + _amount
+      IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID) == initSellerBalance + _amount
+    );
 
-    // Assert internal balances updated correctly, item.amount was initial amount
-    //assert(marketItems[_itemID - 1].amount < item.amount);
+    emit ItemPulled(_itemID, _amount);
     return true;
   }
 
@@ -647,7 +713,13 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     bool _isPush,
     bytes32 _routeID,
     uint256 _itemLimit
-  ) external noBlacklist onlyItemAdmin(_itemID) itemExists(_itemID) returns (bool) {
+  ) external 
+    noReentrantCalls 
+    noBlacklist 
+    onlyItemAdmin(_itemID) 
+    itemExists(_itemID) 
+    returns (bool) 
+  {
     MarketItem memory oldItem = marketItems[_itemID - 1];
     if (!oldItem.routeMutable || _routeID == 0) {
       // If the payment route is not mutable, then set the input equal to the old routeID
@@ -690,6 +762,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    */
   function toggleForSale(uint256 _itemID)
     external
+    noReentrantCalls
     noBlacklist
     onlyItemAdmin(_itemID)
     itemExists(_itemID)
@@ -721,7 +794,13 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits MarketItemDeleted event
    */
-  function deleteMarketItem(uint256 _itemID) external noBlacklist itemExists(_itemID) returns (bool) {
+  function deleteMarketItem(uint256 _itemID) 
+    external 
+    noReentrantCalls 
+    noBlacklist 
+    itemExists(_itemID) 
+    returns (bool) 
+  {
     MarketItem memory item = marketItems[_itemID - 1];
     // Caller must either be item's creator or a Pazari admin, no itemAdmins allowed
     require(
@@ -743,37 +822,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // RETURN
     emit MarketItemDeleted(_itemID, _msgSender(), block.timestamp);
     return true;
-  }
-
-  /**
-   * @dev Returns an array of all items for sale on marketplace
-   *
-   * note This is from the clone OpenSea tutorial, but I modified it to be
-   * slimmer, lighter, and easier to understand.
-   *
-   */
-  function getItemsForSale() public view returns (MarketItem[] memory) {
-    // Fetch total item count, both sold and unsold
-    uint256 itemCount = marketItems.length;
-    // Calculate total unsold items
-    uint256 unsoldItemCount = itemCount - itemsSoldOut.current();
-
-    // Create empty array of all unsold MarketItem structs with fixed length unsoldItemCount
-    MarketItem[] memory items = new MarketItem[](unsoldItemCount);
-
-    uint256 i; // itemID counter for ALL market items, starts at 1
-    uint256 j; // items[] index counter for forSale market items, starts at 0
-
-    // Loop that populates the items[] array
-    for (i = 1; j < unsoldItemCount || i <= itemCount; i++) {
-      if (marketItems[i - 1].forSale) {
-        MarketItem memory unsoldItem = marketItems[i - 1];
-        items[j] = unsoldItem; // Assign unsoldItem to items[j]
-        j++; // Increment j
-      }
-    }
-    // Return the array of unsold items
-    return (items);
   }
 
   /**
@@ -846,22 +894,45 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
    * @dev Requires both tx.origin and msg.sender be admins
    */
+ /**
+   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
+   * @dev Requires both tx.origin and msg.sender be admins
+   * @param _nftContract Contract address of NFT being recovered
+   * @param _tokenID Token ID of NFT
+   * @param _amount Amount of NFTs to recover
+   * @param _recipient Where the NFTs are going
+   * @param _memo Any notes the admin wants to include in the event
+   */
   function recoverNFT(
     address _nftContract,
     uint256 _tokenID,
-    uint256 _amount
-  ) external returns (bool) {
-    require(isAdmin[tx.origin] && isAdmin[msg.sender], "Please contact Pazari support about your lost NFT");
-    require(IERC1155(_nftContract).balanceOf(address(this), _tokenID) != 0, "NFT not here!");
+    uint256 _amount,
+    address _recipient,
+    string memory _memo
+  ) external noReentrantCalls returns (bool) {
     uint256 itemID = tokenMap[_nftContract][_tokenID];
+    uint256 initMarketBalance = IERC1155(_nftContract).balanceOf(address(this), _tokenID);
+    uint256 initOwnerBalance = IERC1155(_nftContract).balanceOf(_recipient, _tokenID);
+    uint256 marketItemBalance = marketItems[itemID - 1].amount;
 
-    // If tokenID exists as an itemID on pazari, then...
-    if (IERC1155(_nftContract).balanceOf(address(this), _tokenID) > marketItems[itemID - 1].amount) {
-      // Compare MarketItem.amount to balanceOf, set _amount equal to imbalanced stock
-      _amount = IERC1155(_nftContract).balanceOf(address(this), _tokenID) - marketItems[itemID - 1].amount;
+    require(initMarketBalance > marketItemBalance, "No tokens available");
+    require(isAdmin[tx.origin] && isAdmin[msg.sender], "Please contact Pazari support about your lost NFT");
+
+    // If _amount is greater than the amount of unlisted tokens
+    if (_amount > initMarketBalance - marketItemBalance) {
+      // Set _amount equal to unlisted tokens
+      _amount = initMarketBalance - marketItemBalance;
     }
 
-    IERC1155(_nftContract).safeTransferFrom(address(this), _msgSender(), _tokenID, _amount, "");
+    // Check that all balances updated correctly
+    assert( // Marketplace final balance should be initial - _amount
+      IERC1155(_nftContract).balanceOf(address(this), _tokenID) == initMarketBalance - _amount
+    );
+    assert( // Recipient final balance should be initial + _amount
+      IERC1155(_nftContract).balanceOf(_recipient, _tokenID) == initOwnerBalance + _amount
+    );
+
+    emit NFTRecovered(_nftContract, _tokenID, _recipient, msgSender, _memo, block.timestamp);
     return true;
   }
 }
