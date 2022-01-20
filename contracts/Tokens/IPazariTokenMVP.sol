@@ -37,7 +37,7 @@ interface IPazariTokenMVP is IERC1155MetadataURI {
    * overwrites ERC1155's uri() function while maintaining compatibility
    * with OpenSea's standards.
    */
-  function uri(uint256 _tokenID) external view returns (string memory);
+  function uri(uint256 _tokenID) external view override returns (string memory);
 
   /**
    * @dev Creates a new Pazari Token
