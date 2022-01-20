@@ -28,9 +28,13 @@ contract AccessControlMP {
   uint256 private constant entered = 2;
   uint256 private status;
 
-
-  // Fires when admins are added or removed
-  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
+  // Fires when Pazari admins are added/removed
+  event AdminAdded(
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,
@@ -87,7 +91,7 @@ contract AccessControlMP {
 
   // Adds an address to isAdmin mapping
   // Emits AdminAdded event
-  function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function addAdmin(address _newAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(!isAdmin[_newAddress], "Address is already an admin");
 
     isAdmin[_newAddress] = true;
@@ -101,7 +105,7 @@ contract AccessControlMP {
   function addItemAdmin(
     uint256 _itemID,
     address _newAddress,
-    string memory _memo
+    string calldata _memo
   ) external onlyItemAdmin(_itemID) returns (bool) {
     require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
     require(!isItemAdmin[_itemID][_newAddress], "Address is already an item admin");
@@ -114,7 +118,7 @@ contract AccessControlMP {
 
   // Removes an address from isAdmin mapping
   // Emits AdminRemoved event
-  function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function removeAdmin(address _oldAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(isAdmin[_oldAddress], "Address is not an admin");
 
     isAdmin[_oldAddress] = false;
@@ -128,7 +132,7 @@ contract AccessControlMP {
   function removeItemAdmin(
     uint256 _itemID,
     address _oldAddress,
-    string memory _memo
+    string calldata _memo
   ) external onlyItemAdmin(_itemID) returns (bool) {
     require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
     require(isItemAdmin[_itemID][_oldAddress], "Address is not an admin");
@@ -151,7 +155,7 @@ contract AccessControlMP {
    * @dev Emits AddressBlacklisted event when _userAddress is blacklisted
    * @dev Emits AddressWhitelisted event when _userAddress is whitelisted
    */
-  function toggleBlacklist(address _userAddress, string memory _memo) external returns (bool) {
+  function toggleBlacklist(address _userAddress, string calldata _memo) external returns (bool) {
     require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari admin");
     require(!isAdmin[_userAddress], "Cannot blacklist admins");
 
@@ -381,7 +385,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @param _routeID The routeID of the payment route assigned to this item
    * @return itemID ItemID of the market item
    */
-
   function createMarketItem(
     address _tokenContract,
     uint256 _tokenID,
@@ -497,7 +500,8 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ItemSoldOut event
    *
-   * note Providing _amount == 0 will purchase the item's full itemLimit.
+   * note Providing _amount == 0 will purchase the item's full itemLimit
+   * minus the buyer's existing balance.
    */
   function buyMarketItem(uint256 _itemID, uint256 _amount)
     external
@@ -640,6 +644,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @param _itemID MarketItem's ID
    * @param _amount Amount of tokens being pulled from Marketplace, 0 == pull all tokens
+   * @return bool Success bool
    *
    * @dev Emits ItemPulled event
    */
@@ -685,26 +690,18 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   }
 
   /**
-   * @dev Function that allows item creator to change price, accepted payment
+   * @notice Function that allows item creator to change price, accepted payment
    * token, whether token uses push or pull routes, and payment route.
    *
    * @param _itemID Market item ID
-   * @param _price Market price in stablecoins (_price == 0 => _itemLimit = 1)
-   * @param _paymentContract Contract address of token accepted for payment
-   * @param _isPush Tells PaymentRouter to use push or pull function
-   * @param _routeID Payment route ID, only mutable if routeMutable == true
-   * @param _itemLimit Buyer's purchase limit for item (_itemLimit == 0 => no limit)
-   * @return bool Success boolean
+   * @param _price Market price in stablecoins
+   * @param _paymentContract Contract address of token accepted for payment (MVP: stablecoin address)
+   * @param _isPush Tells PaymentRouter to use push or pull function (MVP: true)
+   * @param _routeID Payment route ID, only useful if routeMutable == true (MVP: 0)
+   * @param _itemLimit Buyer's purchase limit for item (MVP: 1)
+   * @return Sucess boolean
    *
-   * note What cannot be modified:
-   * - Token contract address
-   * - Token contract token ID
-   * - Seller of market item
-   * - RouteID mutability
-   * - Item's forSale status
-   *
-   * note If _itemLimit and price are set to 0, then price stays at 0 but _itemLimit
-   * is set to 1.
+   * @dev Emits MarketItemChanged event
    */
   function modifyMarketItem(
     uint256 _itemID,
@@ -791,6 +788,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    * @notice Deletes a MarketItem, setting all its properties to default values
    * @dev Does not remove itemID or the entry in marketItems, just sets properties to default
    * and removes tokenMap mappings. This frees up the tokenID to be used in a new MarketItem.
+   * @dev Only the itemCreator or a Pazari admin can call this function
    *
    * @dev Emits MarketItemDeleted event
    */
@@ -883,8 +881,10 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   }
 
   /**
-   * @notice Returns an array of MarketItems created the seller's address
-   * @dev No restrictions for calling this
+   * @notice Returns an array of MarketItems created by the seller's address
+   * @dev Used for displaying seller's items for mini-shops on seller profiles
+   * @dev There is no way to remove items from this array, and deleted itemIDs will still show,
+   * but will have nonexistent item details.
    */
   function getSellersMarketItems(address _sellerAddress) public view returns (uint256[] memory) {
     return sellersMarketItems[_sellerAddress];
@@ -893,22 +893,21 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   /**
    * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
    * @dev Requires both tx.origin and msg.sender be admins
-   */
- /**
-   * @notice This is in case someone mistakenly sends their ERC1155 NFT to this contract address
-   * @dev Requires both tx.origin and msg.sender be admins
    * @param _nftContract Contract address of NFT being recovered
    * @param _tokenID Token ID of NFT
    * @param _amount Amount of NFTs to recover
    * @param _recipient Where the NFTs are going
    * @param _memo Any notes the admin wants to include in the event
+   * @return bool Success bool
+   *
+   * @dev Emits NFTRecovered event
    */
   function recoverNFT(
     address _nftContract,
     uint256 _tokenID,
     uint256 _amount,
     address _recipient,
-    string memory _memo
+    string calldata _memo
   ) external noReentrantCalls returns (bool) {
     uint256 itemID = tokenMap[_nftContract][_tokenID];
     uint256 initMarketBalance = IERC1155(_nftContract).balanceOf(address(this), _tokenID);
