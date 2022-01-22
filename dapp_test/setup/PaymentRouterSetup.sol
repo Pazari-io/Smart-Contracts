@@ -14,14 +14,10 @@ import "./UsersSetup.sol";
 
 /* Import contracts */
 import {PaymentRouter} from "contracts/PaymentRouter/PaymentRouter.sol";
-import {Marketplace} from "contracts/Marketplace/Marketplace.sol";
-import {ERC20} from "contracts/Dependencies/ERC20.sol";
 import {ERC20PresetMinterPauser} from "contracts/Dependencies/ERC20PresetMinterPauser.sol";
-import {ERC1155PresetMinterPauser} from "contracts/Dependencies/ERC1155PresetMinterPauser.sol";
-import {ERC1155} from "contracts/Dependencies/ERC1155.sol";
-import {PazariTokenMVP} from "contracts/Tokens/PazariTokenMVP.sol";
+import {ERC20} from "contracts/Dependencies/ERC20.sol";
 
-contract MPUser is User {
+contract PRUser is User {
   function approveERC20(
     ERC20 erc20,
     address to,
@@ -29,28 +25,50 @@ contract MPUser is User {
   ) public {
     erc20.approve(to, amount);
   }
+
+  function pullTokens(PaymentRouter pr, address tokenAddr) public returns (bool) {
+    bool success = pr.pullTokens(tokenAddr);
+    return success;
+  }
+
+  function togglePaymentRoute(PaymentRouter pr, bytes32 _routeID) public {
+    pr.togglePaymentRoute(_routeID);
+  }
+
+  function adjustRouteTax(
+    PaymentRouter pr,
+    bytes32 _routeID,
+    uint16 _newTax
+  ) public {
+    pr.adjustRouteTax(_routeID, _newTax);
+  }
+
+  function adjustTaxBounds(
+    PaymentRouter pr,
+    uint16 _minTax,
+    uint16 _maxTax
+  ) public {
+    pr.adjustTaxBounds(_minTax, _maxTax);
+  }
 }
 
-contract MarketplaceSetup is DSTestExtended, MPUser {
+contract PaymentRouterSetup is DSTestExtended, User {
   //Hevm setup
   Hevm internal constant HEVM = Hevm(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
 
   //Contracts
   PaymentRouter pr;
-  Marketplace mp;
   ERC20[] erc20s;
-  ERC1155[] erc1155s;
 
   //Users
-  MPUser[] devs;
-  MPUser[] users;
+  PRUser[] devs;
+  PRUser[] users;
   NFTHolder treasury;
 
   //Settings
   uint8 numDevs = 5;
   uint8 numUsers = 10;
   uint8 erc20Amount = 5;
-  uint8 erc1155Amount = 5;
   uint16 minTax = 50;
   uint16 maxTax = 5000;
 
@@ -61,18 +79,36 @@ contract MarketplaceSetup is DSTestExtended, MPUser {
 
     //Setup users
     for (uint256 i = 0; i < numDevs; i++) {
-      devs.push(new MPUser());
+      devs.push(new PRUser());
     }
     for (uint256 i = 0; i < numUsers; i++) {
-      users.push(new MPUser());
+      users.push(new PRUser());
     }
     treasury = new NFTHolder();
 
     //Deploy contracts
     paymentRouterDeploy(minTax, maxTax);
-    marketplaceDeploy(address(pr));
     erc20sDeploy(erc20Amount);
-    erc1155sDeploy(erc1155Amount);
+  }
+
+  function createPRUsers(uint256 num) public virtual returns (PRUser[] memory) {
+    PRUser[] memory prUsers = new PRUser[](num);
+    for (uint256 i = 0; i < num; i++) {
+      prUsers[i] = new PRUser();
+    }
+    return prUsers;
+  }
+
+  function toPRUser(address userAddr) public virtual returns (PRUser) {
+    return PRUser(payable(userAddr));
+  }
+
+  function fromPRUsers(PRUser[] memory prUsers) public virtual returns (address[] memory) {
+    address[] memory prUsersAddr = new address[](prUsers.length);
+    for (uint256 i = 0; i < prUsers.length; i++) {
+      prUsersAddr[i] = address(prUsers[i]);
+    }
+    return prUsersAddr;
   }
 
   function paymentRouterDeploy(uint16 _minTax, uint16 _maxTax) public virtual {
@@ -83,36 +119,10 @@ contract MarketplaceSetup is DSTestExtended, MPUser {
     pr = new PaymentRouter(address(treasury), devsAddr, _minTax, _maxTax);
   }
 
-  function marketplaceDeploy(address prAddr) public virtual {
-    mp = new Marketplace(prAddr);
-  }
-
-  function erc1155sDeploy(uint8 amount) public virtual {
-    for (uint256 i = 0; i < amount; i++) {
-      address erc1155Addr = address(new ERC1155PresetMinterPauser());
-      erc1155s.push(ERC1155(erc1155Addr));
-    }
-  }
-
   function erc20sDeploy(uint8 amount) public virtual {
     for (uint256 i = 0; i < amount; i++) {
       address erc20Addr = address(new ERC20PresetMinterPauser("abc", "ABC"));
       erc20s.push(ERC20(erc20Addr));
-    }
-  }
-
-  function erc1155Mint(
-    uint8 index,
-    address to,
-    uint256 id,
-    uint256 amount
-  ) public virtual {
-    require(index < erc1155s.length, "Invalid array length");
-    string memory uri = "https://api.pazari.io/metadata/";
-    bytes memory data = "0x";
-    if (index < erc1155s.length) {
-      ERC1155PresetMinterPauser erc1155 = ERC1155PresetMinterPauser(address(erc1155s[index]));
-      erc1155.mint(to, id, amount, uri, data);
     }
   }
 
@@ -164,11 +174,11 @@ contract MarketplaceSetup is DSTestExtended, MPUser {
 
     uint16 sum = 0;
     for (uint8 i = 0; i < num - 1; i++) {
-      recipients[i] = address(new MPUser());
+      recipients[i] = address(new PRUser());
       commissions[i] = 10000 / num;
       sum += 10000 / num;
     }
-    recipients[num - 1] = address(new MPUser());
+    recipients[num - 1] = address(new PRUser());
     commissions[num - 1] = 10000 - sum;
 
     //Create payment route

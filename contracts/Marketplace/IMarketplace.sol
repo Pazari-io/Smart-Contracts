@@ -106,7 +106,7 @@ interface IMarketplace {
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
    *
-   * @dev Emits ItemSoldOut event when last item is bought 
+   * @dev Emits ItemSoldOut event when last item is bought
    * @dev Emits MarketItemSold event for every purchase
    *
    * @dev Providing _amount == 0 will purchase the item's full itemLimit, which
@@ -208,7 +208,7 @@ interface IMarketplace {
 
   /**
    * @notice Directly accesses the marketItems[] array
-   * 
+   *
    * @param _index Array index position, _index = itemID - 1
    * @return MarketItem MarketItem struct stored at _index
    */
@@ -253,12 +253,7 @@ interface IMarketplace {
  */
 interface IAccessControlMP {
   // Fires when Pazari admins are added/removed
-  event AdminAdded(
-    address indexed newAdmin, 
-    address indexed adminAuthorized, 
-    string memo, 
-    uint256 timestamp
-  );
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,
@@ -315,9 +310,9 @@ interface IAccessControlMP {
   function itemCreator(uint256 _itemID) external view returns (address itemCreator);
 
   /**
-   * @notice Adds an address to isAdmin mapping 
+   * @notice Adds an address to isAdmin mapping
    * @dev Only admins and admin contracts operated by admins may call
-   * 
+   *
    * @param _newAddress Address being added
    * @param _memo Optional message to include in event emission
    * @return bool Success bool
@@ -327,9 +322,9 @@ interface IAccessControlMP {
   function addAdmin(address _newAddress, string calldata _memo) external returns (bool);
 
   /**
-   * @notice Removes an address from isAdmin mapping 
+   * @notice Removes an address from isAdmin mapping
    * @dev Only admins and admin contracts operated by admins may call
-   * 
+   *
    * @param _oldAddress Address being removed
    * @param _memo Optional message to include in event emission
    * @return bool Success bool
@@ -339,9 +334,9 @@ interface IAccessControlMP {
   function removeAdmin(address _oldAddress, string calldata _memo) external returns (bool);
 
   /**
-   * @notice Adds an address to isItemAdmin mapping  
+   * @notice Adds an address to isItemAdmin mapping
    * @dev Only admins and itemAdmins may call
-   * 
+   *
    * @param _newAddress Address being added
    * @param _itemID Marketplace itemID of MarketItem
    * @param _memo Optional message to include in event emission
@@ -356,9 +351,9 @@ interface IAccessControlMP {
   ) external returns (bool);
 
   /**
-   * @notice Removes an address from isItemAdmin mapping 
+   * @notice Removes an address from isItemAdmin mapping
    * @dev Only admins and itemAdmins may call
-   * 
+   *
    * @param _oldAddress Address being removed
    * @param _itemID Marketplace itemID of MarketItem
    * @param _memo Optional message to include in event emission

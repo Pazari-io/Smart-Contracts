@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IFactoryPazariTokenMVP {
-
   /**
    * @notice Clones and deploys a PazariTokenMVP contract
    *
@@ -15,8 +14,5 @@ interface IFactoryPazariTokenMVP {
    * @dev It is important to include this factory's address as a
    * contract owner, or else the caller will not have ownership.
    */
-  function newPazariTokenMVP(address[] memory _contractOwners) 
-    external 
-    returns (address newContract);
-
+  function newPazariTokenMVP(address[] memory _contractOwners) external returns (address newContract);
 }

@@ -17,12 +17,7 @@ contract AccessControlPMVP {
   mapping(address => bool) public isAdmin;
 
   // Fires when Pazari admins are added/removed
-  event AdminAdded(
-    address indexed newAdmin, 
-    address indexed adminAuthorized, 
-    string memo, 
-    uint256 timestamp
-  );
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,
@@ -99,9 +94,9 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
   // Fires when a new user joins Pazari
   event NewUserCreated(
-    address indexed userAddress, 
-    bytes32 routeID, 
-    address tokenContractAddress, 
+    address indexed userAddress,
+    bytes32 routeID,
+    address tokenContractAddress,
     uint256 timestamp
   );
 
@@ -130,11 +125,11 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
   // Fires when admin recovers lost NFT(s)
   event NFTRecovered(
-    address indexed tokenContract, 
-    uint256 indexed tokenID, 
-    address recipient, 
-    address indexed admin, 
-    string memo, 
+    address indexed tokenContract,
+    uint256 indexed tokenID,
+    address recipient,
+    address indexed admin,
+    string memo,
     uint256 timestamp
   );
 
