@@ -200,23 +200,8 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
    * @return address Contract address of user's token contract
    */
   function createUserProfile() private returns (address) {
-    // Require that admins completed initialization
-    require(
-      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)),
-      "Admins must add PazariMVP as admin for Marketplace"
-    ); 
-    require(
-      IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)),
-      "Admins must add PazariMVP as admin for PaymentRouter"
-    );
-
     // Store return value of _msgSender()
     address msgSender = _msgSender();
-
-    // Find out if msgSender is blacklisted from the Marketplace
-    require(!IAccessControlMP(address(iMarketplace)).isBlacklisted(msgSender), "Caller is blacklisted");
-    // Check that user doesn't already have a UserProfile
-    require(userProfile[msgSender].userAddress == address(0), "User already registered!");
 
     // PaymentRouter \\
     // Create singleton arrays for PaymentRouter inputs
@@ -234,7 +219,6 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     address tokenContractAddress = iFactoryPazariTokenMVP.newPazariTokenMVP(admins);
     admins.pop(); // Pop msgSender back out to not become admin of next user's contract
     deployedContracts.push(tokenContractAddress);
-    admins.pop(); // Pop msgSender back out
     // Emits basic information about deployed contract
     emit ContractCloned(
       deployedContracts.length,
