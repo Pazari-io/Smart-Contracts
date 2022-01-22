@@ -180,9 +180,9 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     iERC20 = IERC20(_stablecoin);
     iFactoryPazariTokenMVP = FactoryPazariTokenMVP(_factory);
     // Push Pazari core addresses to admins
-    admins.push(address(_market));
-    admins.push(address(_paymentRouter));
-    admins.push(address(_factory));
+    admins.push(_market);
+    admins.push(_paymentRouter);
+    admins.push(_factory);
     admins.push(address(this));
   }
 
@@ -230,8 +230,9 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
     // FactoryPazariTokenMVP \\
     // Clone new PazariTokenMVP contract, store data, fire event
-    admins.push(msgSender); // Push msgSender in as an admin for new contract
+    admins.push(msgSender); // Push msgSender in to become admin of their contract
     address tokenContractAddress = iFactoryPazariTokenMVP.newPazariTokenMVP(admins);
+    admins.pop(); // Pop msgSender back out to not become admin of next user's contract
     deployedContracts.push(tokenContractAddress);
     admins.pop(); // Pop msgSender back out
     // Emits basic information about deployed contract
