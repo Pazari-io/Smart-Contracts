@@ -609,27 +609,6 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Checking if seller owns tokenID 2: " + (await market.ownsTokens(seller, [2])));
   console.log("Checking if accounts[8] owns tokenID 2 (it does not): " + (await market.ownsTokens(accounts[8], [3])));
 
-  //TOGGLE FOR SALE
-  console.log("\n14. TESTING: toggleForSale(itemID)");
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  console.log("Item for sale? " + forSale);
-  console.log("Running toggleForSale(itemID)");
-  console.log("Estimating gas: " + (await market.toggleForSale.estimateGas(itemID, { from: seller })));
-  await market.toggleForSale(itemID, { from: seller });
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  buyAmount = 2;
-  console.log("Item for sale? " + forSale);
-  //console.log("Attempt to purchase a not-for-sale item: ");
-  //await market.buyMarketItem(itemID, buyAmount);
-  console.log("Running toggleForSale(itemID)");
-  await market.toggleForSale(itemID, { from: seller });
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  buyAmount = 2;
-  console.log("Item for sale? " + forSale);
-
   //DELETE ITEM
   console.log("\n15. TESTING: deleteMarketItem()");
   console.log("Pull all item stock for itemID " + itemID);
