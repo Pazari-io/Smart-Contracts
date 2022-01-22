@@ -169,17 +169,18 @@ module.exports = async function (deployer, network, accounts) {
   console.log("forSaleItemIDs: " + forSaleItemIDs);
   console.log(await market.getMarketItems(forSaleItemIDs));
 
-  // Run newUser() for seller2
-  console.log("\n10. RUNNING pazariMVP.newTokenListing(seller2)");
+    //CHANGE BACK TO SELLER2
+  // Run newUser() for seller
+  console.log("\n10. RUNNING pazariMVP.newTokenListing(seller)");
   var uri3 = "SOME_URI_HERE";
   var amount3 = 30;
   var price3 = web3.utils.toWei("14.99");
   console.log("Create an item with amount " + amount3 + " and price $" + web3.utils.fromWei(price3));
   console.log("Inputs: " + uri3 + ", " + amount3 + ", " + web3.utils.fromWei(price3));
   console.log(
-    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri3, amount3, price3, { from: seller2 })),
+    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri3, amount3, price3, { from: seller })),
   );
-  await pazariMVP.newTokenListing(uri3, amount3, price3, { from: seller2 });
+  await pazariMVP.newTokenListing(uri3, amount3, price3, { from: seller });
 
   // Run newTokenListing(seller) (not seller2)
   // Need to check that tokenIDs and itemIDs increment independently and correctly
