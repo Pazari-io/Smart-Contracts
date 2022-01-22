@@ -283,16 +283,16 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   // Struct for market items being sold;
   struct MarketItem {
     uint256 itemID;
-    address tokenContract;
     uint256 tokenID;
-    uint256 amount;
     uint256 price;
+    uint256 amount;
+    uint256 itemLimit;
+    bytes32 routeID;
+    address tokenContract;
     address paymentContract;
     bool isPush;
-    bytes32 routeID;
     bool routeMutable;
     bool forSale;
-    uint256 itemLimit;
   }
 
   // Counter for items with forSale == false
@@ -345,6 +345,19 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     uint256 _itemLimit,
     bool _routeMutable
   ) external noReentrantCalls noBlacklist returns (uint256 itemID) {
+    MarketItem memory item = MarketItem({
+      itemID: itemID,
+      tokenContract: _tokenContract,
+      tokenID: _tokenID,
+      amount: _amount,
+      price: _price,
+      paymentContract: _paymentContract,
+      isPush: _isPush,
+      routeID: _routeID,
+      routeMutable: _routeMutable,
+      forSale: _forSale,
+      itemLimit: _itemLimit
+    });
     /* ========== CHECKS ========== */
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_paymentContract != address(0), "Invalid payment token contract address");
@@ -359,18 +372,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== EFFECTS ========== */
 
     // Store MarketItem data
-    itemID = _createMarketItem(
-      _tokenContract,
-      _tokenID,
-      _amount,
-      _price,
-      _paymentContract,
-      _isPush,
-      _forSale,
-      _routeID,
-      _itemLimit,
-      _routeMutable
-    );
+    itemID = _createMarketItem(item);
 
     /* ========== INTERACTIONS ========== */
 
@@ -378,8 +380,11 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
 
     // Check that Marketplace's internal balance matches the token's balanceOf() value
-    MarketItem memory item = marketItems[itemID - 1];
-    assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
+    item = marketItems[itemID - 1];
+    require(
+      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) >= item.amount,
+      "Market received insufficient tokens"
+    );
   }
 
   /**
@@ -401,6 +406,20 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     address _paymentContract,
     bytes32 _routeID
   ) external noReentrantCalls noBlacklist returns (uint256 itemID) {
+    MarketItem memory item = MarketItem({
+      itemID: itemID,
+      tokenContract: _tokenContract,
+      tokenID: _tokenID,
+      amount: _amount,
+      price: _price,
+      paymentContract: _paymentContract,
+      isPush: true,
+      routeID: _routeID,
+      routeMutable: false,
+      forSale: true,
+      itemLimit: 1
+    });
+
     /* ========== CHECKS ========== */
     require(tokenMap[_tokenContract][_tokenID] == 0, "Item already exists");
     require(_paymentContract != address(0), "Invalid payment token contract address");
@@ -415,18 +434,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== EFFECTS ========== */
 
     // Store MarketItem data
-    itemID = _createMarketItem(
-      _tokenContract,
-      _tokenID,
-      _amount,
-      _price,
-      _paymentContract,
-      true,
-      true,
-      _routeID,
-      1,
-      false
-    );
+    itemID = _createMarketItem(item);
 
     /* ========== INTERACTIONS ========== */
 
@@ -434,71 +442,54 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
 
     // Check that Marketplace's internal balance matches the token's balanceOf() value
-    MarketItem memory item = marketItems[itemID - 1];
-    assert(IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == item.amount);
+    item = marketItems[itemID - 1];
+    require(
+      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) >= item.amount,
+      "Market did not receive tokens"
+    );
   }
 
   /**
    * @dev Private function that updates internal variables and storage for a new MarketItem
    */
-  function _createMarketItem(
-    address _tokenContract,
-    uint256 _tokenID,
-    uint256 _amount,
-    uint256 _price,
-    address _paymentContract,
-    bool _isPush,
-    bool _forSale,
-    bytes32 _routeID,
-    uint256 _itemLimit,
-    bool _routeMutable
-  ) private returns (uint256 itemID) {
+  function _createMarketItem(MarketItem memory item) private returns (uint256 itemID) {
     // If itemLimit == 0, then there is no itemLimit, use type(uint256).max to make itemLimit infinite
-    if (_itemLimit == 0) {
-      _itemLimit = type(uint256).max;
+    if (item.itemLimit == 0) {
+      item.itemLimit = type(uint256).max;
     }
     // If price == 0, then the item is free and only one copy can be owned
-    if (_price == 0) {
-      _itemLimit = 1;
+    if (item.price == 0) {
+      item.itemLimit = 1;
     }
 
-    // Add + 1 so itemID 0 will never exist and can be used for checks
-    // Just remember to use [itemID - 1] when accessing marketItems[]
+    // Define itemID
     itemID = marketItems.length + 1;
-
-    // Store new MarketItem in local variable
-    MarketItem memory item = MarketItem(
-      itemID,
-      _tokenContract,
-      _tokenID,
-      _amount,
-      _price,
-      _paymentContract,
-      _isPush,
-      _routeID,
-      _routeMutable,
-      _forSale,
-      _itemLimit
-    );
-
-    // Assign isItemAdmin and itemCreator to _msgSender()
-    isItemAdmin[itemID][_msgSender()] = true;
-    itemCreator[itemID] = _msgSender();
-    // Pushes MarketItem to marketItems[]
+    // Update local variable's itemID
+    item.itemID = itemID;
+    // Push local variable to marketItems[]
     marketItems.push(item);
-
+    
     // Push itemID to sellersMarketItems mapping array
-    // _msgSender == sellerAddress
-    sellersMarketItems[_msgSender()].push(item.itemID);
+    sellersMarketItems[msgSender].push(item.itemID);
 
     // Assign itemID to tokenMap mapping
-    tokenMap[_tokenContract][_tokenID] = itemID;
+    tokenMap[item.tokenContract][item.tokenID] = itemID;
+
+    // Assign isItemAdmin and itemCreator to msgSender()
+    itemCreator[itemID] = msgSender;
+    isItemAdmin[itemID][msgSender] = true;
 
     // Emits MarketItemCreated event
-    // _msgSender == sellerAddress
-    emit MarketItemCreated(itemID, _tokenContract, _tokenID, _msgSender(), _price, _amount, _paymentContract);
+    emit MarketItemCreated(
+      itemID,
+      item.tokenContract,
+      item.tokenID,
+      msgSender,
+      item.price,
+      item.amount,
+      item.paymentContract
+    );
   }
-
   /**
    * @dev Purchases an _amount of market item itemID
    *
@@ -754,7 +745,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ForSaleToggled event
    */
-   /*
   function toggleForSale(uint256 _itemID)
     external
     noReentrantCalls
@@ -781,7 +771,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
     return marketItems[_itemID - 1].forSale;
   }
-  */
 
   /**
    * @notice Deletes a MarketItem, setting all its properties to default values
