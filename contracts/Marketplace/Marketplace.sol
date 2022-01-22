@@ -22,9 +22,9 @@ contract AccessControlMP {
   // Maps itemID to the address that created it
   mapping(uint256 => address) public itemCreator;
 
-  string errorMsgCallerNotAdmin;
-  string errorMsgAddressAlreadyAdmin;
-  string errorMsgAddressNotAdmin;
+  string private errorMsgCallerNotAdmin;
+  string private errorMsgAddressAlreadyAdmin;
+  string private errorMsgAddressNotAdmin;
 
   // Used by noReentrantCalls
   address internal msgSender;
@@ -366,7 +366,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
 
     // If _amount == 0, then move entire token balance to Marketplace
     if (_amount == 0) {
-      _amount = IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID);
+      item.amount = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
     }
 
     /* ========== EFFECTS ========== */
@@ -377,7 +377,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== INTERACTIONS ========== */
 
     // Transfer tokens from seller to Marketplace
-    IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
+    IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), item.tokenID, item.amount, "");
 
     // Check that Marketplace's internal balance matches the token's balanceOf() value
     item = marketItems[itemID - 1];
@@ -428,7 +428,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
 
     // If _amount == 0, then move entire token balance to Marketplace
     if (_amount == 0) {
-      _amount = IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID);
+      item.amount = IERC1155(_tokenContract).balanceOf(_msgSender(), _tokenID);
     }
 
     /* ========== EFFECTS ========== */
@@ -439,7 +439,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     /* ========== INTERACTIONS ========== */
 
     // Transfer tokens from seller to Marketplace
-    IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, _amount, "");
+    IERC1155(_tokenContract).safeTransferFrom(_msgSender(), address(this), _tokenID, item.amount, "");
 
     // Check that Marketplace's internal balance matches the token's balanceOf() value
     item = marketItems[itemID - 1];
@@ -490,6 +490,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
       item.paymentContract
     );
   }
+  
   /**
    * @dev Purchases an _amount of market item itemID
    *
@@ -697,7 +698,8 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     address _paymentContract,
     bool _isPush,
     bytes32 _routeID,
-    uint256 _itemLimit
+    uint256 _itemLimit,
+    bool _forSale
   ) external 
     noReentrantCalls 
     noBlacklist 
@@ -706,13 +708,25 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     returns (bool) 
   {
     MarketItem memory oldItem = marketItems[_itemID - 1];
+    // routeMutable logic
     if (!oldItem.routeMutable || _routeID == 0) {
       // If the payment route is not mutable, then set the input equal to the old routeID
       _routeID = oldItem.routeID;
     }
+    // itemLimit special condition logic
     // If itemLimit == 0, then there is no itemLimit, use type(uint256).max to make itemLimit infinite
     if (_itemLimit == 0) {
       _itemLimit = type(uint256).max;
+    }  
+
+    // Toggle forSale logic
+    if ((oldItem.forSale != _forSale) && (_forSale == false)) {
+      itemsSoldOut.increment();
+      emit ForSaleToggled(_itemID, _forSale);
+    } else if ((oldItem.forSale != _forSale) && (_forSale == true)) {
+      require(oldItem.amount > 0, "Restock item before reactivating");
+      itemsSoldOut.decrement();
+      emit ForSaleToggled(_itemID, _forSale);
     }
 
     // Modify MarketItem within marketItems array
@@ -726,7 +740,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
       isPush: _isPush,
       routeID: _routeID,
       routeMutable: oldItem.routeMutable,
-      forSale: oldItem.forSale,
+      forSale: _forSale,
       itemLimit: _itemLimit
     });
 
@@ -745,6 +759,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ForSaleToggled event
    */
+/* 
   function toggleForSale(uint256 _itemID)
     external
     noReentrantCalls
@@ -771,6 +786,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
     return marketItems[_itemID - 1].forSale;
   }
+*/
 
   /**
    * @notice Deletes a MarketItem, setting all its properties to default values
