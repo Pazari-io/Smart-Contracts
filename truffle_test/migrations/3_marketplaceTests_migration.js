@@ -40,7 +40,7 @@ module.exports = async function (deployer, network, accounts) {
 
   //DEPLOY MARKETPLACE, then
   await deployer.deploy(Marketplace, router.address, [devWallet], {
-    gas: 6700000,
+    gas: 6721975,
     gasPrice: 8000000000,
     from: seller,
   });
@@ -391,12 +391,6 @@ module.exports = async function (deployer, network, accounts) {
   await market.buyMarketItem(itemID2, buyAmount2, { from: buyer });
   console.log("Running buyMarketItem() for itemID 3:");
   await market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
-
-  //FETCH UNSOLD ITEM LIST AGAIN, MAKE SURE IT CLEARED SOLD OUT ORDERS CORRECTLY
-  console.log("\n10. TESTING: Marketplace.getItemsForSale()");
-  console.log("Running getItemsForSale():");
-  marketItems = await market.getItemsForSale();
-  console.log(marketItems);
 
   //CHECK BALANCES, MAKE SURE TOKEN AND VALUE ROUTED CORRECTLY
   console.log("\n11. Checking PazariToken balances for tokenID 1: (buyer, seller)");
