@@ -716,19 +716,19 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     }
 
     // Modify MarketItem within marketItems array
-    marketItems[_itemID - 1] = MarketItem(
-      _itemID,
-      oldItem.tokenContract,
-      oldItem.tokenID,
-      oldItem.amount,
-      _price,
-      _paymentContract,
-      _isPush,
-      _routeID,
-      oldItem.routeMutable,
-      oldItem.forSale,
-      _itemLimit
-    );
+    marketItems[_itemID - 1] = MarketItem({
+      itemID: _itemID,
+      tokenContract: oldItem.tokenContract,
+      tokenID: oldItem.tokenID,
+      amount: oldItem.amount,
+      price: _price,
+      paymentContract: _paymentContract,
+      isPush: _isPush,
+      routeID: _routeID,
+      routeMutable: oldItem.routeMutable,
+      forSale: oldItem.forSale,
+      itemLimit: _itemLimit
+    });
 
     emit MarketItemChanged(_itemID, _price, _paymentContract, _isPush, _routeID, _itemLimit);
     return true;
