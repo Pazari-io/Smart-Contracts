@@ -4,46 +4,68 @@ pragma solidity ^0.8.0;
 interface IMarketplace {
   //***EVENTS***\\
 
-  // Fires when a MarketItem is sold;
-  event MarketItemSold(uint256 indexed itemID, uint256 amount, address owner);
+  // Fires when a new MarketItem is created;
+  event MarketItemCreated(
+    uint256 indexed itemID,
+    address indexed nftContract,
+    uint256 tokenID,
+    address indexed admin,
+    uint256 price,
+    uint256 amount,
+    address paymentToken
+  );
 
-  // Fires when a creator restocks MarketItems that are sold out
-  event ItemRestocked(uint256 indexed itemID, uint256 amount);
+  // Fires when a MarketItem is sold;
+  event MarketItemSold(uint256 indexed itemID, uint256 amount, address indexed buyer);
 
   // Fires when a MarketItem's last token is bought
   event ItemSoldOut(uint256 indexed itemID);
 
-  // Fires when forSale is toggled on or off for an itemID
-  // If forSale == true, then forSale was toggled on
-  // If forSale == false, then forSale was toggled off
-  event ForSaleToggled(uint256 itemID, bool forSale);
+  // Fires when a creator restocks MarketItems that are sold out
+  event ItemRestocked(uint256 indexed itemID, uint256 amount);
 
   // Fires when a creator pulls a MarketItem's stock from the Marketplace
-  event StockPulled(uint256 itemID, uint256 amount);
+  event ItemPulled(uint256 indexed itemID, uint256 amount);
+
+  // Fires when forSale is toggled on or off for an itemID
+  event ForSaleToggled(uint256 indexed itemID, bool forSale);
+
+  // Fires when a MarketItem has been deleted
+  event MarketItemDeleted(uint256 indexed itemID, address indexed itemAdmin, uint256 timestamp);
 
   // Fires when market item details are modified
   event MarketItemChanged(
-    uint256 itemID,
-    uint256 price,
+    uint256 indexed itemID,
+    uint256 indexed price,
     address paymentContract,
     bool isPush,
-    bytes32 routeID,
+    bytes32 indexed routeID,
     uint256 itemLimit
+  );
+
+  // Fires when admin recovers lost NFT(s)
+  event NFTRecovered(
+    address indexed tokenContract, 
+    uint256 indexed tokenID, 
+    address recipient, 
+    address indexed admin, 
+    string memo, 
+    uint256 timestamp
   );
 
   // Struct for market items being sold;
   struct MarketItem {
     uint256 itemID;
-    address tokenContract;
     uint256 tokenID;
-    uint256 amount;
     uint256 price;
+    uint256 amount;
+    uint256 itemLimit;
+    bytes32 routeID;
+    address tokenContract;
     address paymentContract;
     bool isPush;
-    bytes32 routeID;
     bool routeMutable;
     bool forSale;
-    uint256 itemLimit;
   }
 
   //***FUNCTIONS: SETTERS***\\
@@ -106,7 +128,7 @@ interface IMarketplace {
    * @param _amount Amount of item itemID being purchased (MVP: 1)
    * @return bool Success boolean
    *
-   * @dev Emits ItemSoldOut event when last item is bought
+   * @dev Emits ItemSoldOut event when last item is bought 
    * @dev Emits MarketItemSold event for every purchase
    *
    * @dev Providing _amount == 0 will purchase the item's full itemLimit, which
@@ -147,9 +169,11 @@ interface IMarketplace {
    * @param _isPush Tells PaymentRouter to use push or pull function (MVP: true)
    * @param _routeID Payment route ID, only useful if routeMutable == true (MVP: 0)
    * @param _itemLimit Buyer's purchase limit for item (MVP: 1)
-   * @return Sucess boolean
+   * @param _forSale Determines if item can be purchased (MVP: true)
+   * @return Success boolean
    *
    * @dev Emits MarketItemChanged event
+   * @dev Emits ForSaleToggled if _forSale is different
    */
   function modifyMarketItem(
     uint256 _itemID,
@@ -157,21 +181,9 @@ interface IMarketplace {
     address _paymentContract,
     bool _isPush,
     bytes32 _routeID,
-    uint256 _itemLimit
+    uint256 _itemLimit,
+    bool _forSale
   ) external returns (bool);
-
-  /**
-   * @dev Toggles whether an item is for sale or not
-   *
-   * @dev Use this function to activate/deactivate items for sale on market. Only items that are
-   * forSale will be returned by getInStockItems().
-   *
-   * @param _itemID Marketplace ID of item for sale
-   * @return forSale True = item reactivated, false = item deactivated
-   *
-   * @dev Emits ForSaleToggled event
-   */
-  function toggleForSale(uint256 _itemID) external returns (bool forSale);
 
   /**
    * @notice Deletes a MarketItem, setting all its properties to default values
@@ -208,7 +220,7 @@ interface IMarketplace {
 
   /**
    * @notice Directly accesses the marketItems[] array
-   *
+   * 
    * @param _index Array index position, _index = itemID - 1
    * @return MarketItem MarketItem struct stored at _index
    */
@@ -249,11 +261,17 @@ interface IMarketplace {
 
 /**
  * @notice All access control functions and events used by Marketplace
- * @dev Not needed for MVP, but they're here if needed
+ * @dev Contains functions and events for Pazari admins and seller item admins, as
+ * well as managing the blacklist. Contains modifier for reentrancy guards.
  */
 interface IAccessControlMP {
   // Fires when Pazari admins are added/removed
-  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
+  event AdminAdded(
+    address indexed newAdmin, 
+    address indexed adminAuthorized, 
+    string memo, 
+    uint256 timestamp
+  );
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,
@@ -310,9 +328,9 @@ interface IAccessControlMP {
   function itemCreator(uint256 _itemID) external view returns (address itemCreator);
 
   /**
-   * @notice Adds an address to isAdmin mapping
+   * @notice Adds an address to isAdmin mapping 
    * @dev Only admins and admin contracts operated by admins may call
-   *
+   * 
    * @param _newAddress Address being added
    * @param _memo Optional message to include in event emission
    * @return bool Success bool
@@ -322,9 +340,9 @@ interface IAccessControlMP {
   function addAdmin(address _newAddress, string calldata _memo) external returns (bool);
 
   /**
-   * @notice Removes an address from isAdmin mapping
+   * @notice Removes an address from isAdmin mapping 
    * @dev Only admins and admin contracts operated by admins may call
-   *
+   * 
    * @param _oldAddress Address being removed
    * @param _memo Optional message to include in event emission
    * @return bool Success bool
@@ -334,9 +352,9 @@ interface IAccessControlMP {
   function removeAdmin(address _oldAddress, string calldata _memo) external returns (bool);
 
   /**
-   * @notice Adds an address to isItemAdmin mapping
+   * @notice Adds an address to isItemAdmin mapping  
    * @dev Only admins and itemAdmins may call
-   *
+   * 
    * @param _newAddress Address being added
    * @param _itemID Marketplace itemID of MarketItem
    * @param _memo Optional message to include in event emission
@@ -351,9 +369,9 @@ interface IAccessControlMP {
   ) external returns (bool);
 
   /**
-   * @notice Removes an address from isItemAdmin mapping
+   * @notice Removes an address from isItemAdmin mapping 
    * @dev Only admins and itemAdmins may call
-   *
+   * 
    * @param _oldAddress Address being removed
    * @param _itemID Marketplace itemID of MarketItem
    * @param _memo Optional message to include in event emission
