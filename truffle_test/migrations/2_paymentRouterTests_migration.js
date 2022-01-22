@@ -1,18 +1,3 @@
-/**
- * This contract does not test the contract factory's upgradable shell nor
- * the contract factory itself. I couldn't figure out how to get it working
- * very fast and I was wasting too much time. We can use this one for now.
- *
- * These tests more or less run through the basic functionality of Pazari:
- * - Tokenizing content (minting PazariTokens)
- * - Listing tokenized content (createMarketItem)
- * - Getting a list of all tokens for sale
- *
- * FEATURES TO TEST:
- * - Burning tokens removes user from tokenHolders array for that tokenID
- * - Airdrop function
- */
-
 const Marketplace = artifacts.require("Marketplace");
 const PaymentRouter = artifacts.require("PaymentRouter");
 const ERC20PresetMinterPauser = artifacts.require("ERC20PresetMinterPauser");

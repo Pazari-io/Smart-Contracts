@@ -40,7 +40,7 @@ module.exports = async function (deployer, network, accounts) {
 
   //DEPLOY MARKETPLACE, then
   await deployer.deploy(Marketplace, router.address, [devWallet], {
-    gas: 6700000,
+    gas: 6721975,
     gasPrice: 8000000000,
     from: seller,
   });
@@ -392,12 +392,6 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Running buyMarketItem() for itemID 3:");
   await market.buyMarketItem(itemID3, buyAmount3, { from: buyer });
 
-  //FETCH UNSOLD ITEM LIST AGAIN, MAKE SURE IT CLEARED SOLD OUT ORDERS CORRECTLY
-  console.log("\n10. TESTING: Marketplace.getItemsForSale()");
-  console.log("Running getItemsForSale():");
-  marketItems = await market.getItemsForSale();
-  console.log(marketItems);
-
   //CHECK BALANCES, MAKE SURE TOKEN AND VALUE ROUTED CORRECTLY
   console.log("\n11. Checking PazariToken balances for tokenID 1: (buyer, seller)");
   console.log("buyer: " + (await token.balanceOf(buyer, tokenID2).then((bn) => bn.toNumber())));
@@ -614,27 +608,6 @@ module.exports = async function (deployer, network, accounts) {
   console.log("Checking if buyer owns tokenID 1: " + (await market.ownsTokens(buyer, [1])));
   console.log("Checking if seller owns tokenID 2: " + (await market.ownsTokens(seller, [2])));
   console.log("Checking if accounts[8] owns tokenID 2 (it does not): " + (await market.ownsTokens(accounts[8], [3])));
-
-  //TOGGLE FOR SALE
-  console.log("\n14. TESTING: toggleForSale(itemID)");
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  console.log("Item for sale? " + forSale);
-  console.log("Running toggleForSale(itemID)");
-  console.log("Estimating gas: " + (await market.toggleForSale.estimateGas(itemID, { from: seller })));
-  await market.toggleForSale(itemID, { from: seller });
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  buyAmount = 2;
-  console.log("Item for sale? " + forSale);
-  //console.log("Attempt to purchase a not-for-sale item: ");
-  //await market.buyMarketItem(itemID, buyAmount);
-  console.log("Running toggleForSale(itemID)");
-  await market.toggleForSale(itemID, { from: seller });
-  item = await market.getMarketItems([itemID]);
-  forSale = item[0].forSale;
-  buyAmount = 2;
-  console.log("Item for sale? " + forSale);
 
   //DELETE ITEM
   console.log("\n15. TESTING: deleteMarketItem()");

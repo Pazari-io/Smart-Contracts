@@ -137,7 +137,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log(await market.getMarketItems(itemIDs));
 
   // Test newTokenListing() for same seller as test #1
-  console.log("\n4. RUNNING newTokenListing(seller):");
+  console.log("\n4. RUNNING pazariMVP.newTokenListing(seller):");
   var uri2 = "TOKEN_URI_2_GOES_HERE";
   var amount2 = 20;
   var price2 = web3.utils.toWei("9.99");
@@ -164,28 +164,22 @@ module.exports = async function (deployer, network, accounts) {
   var forSaleItemIDs = await market.getItemIDsForSale();
   console.log("forSaleItemIDs:" + forSaleItemIDs);
 
-  /*
-  // Test if manually entering an array of [1] works
-  console.log("\n8. RUNNING market.getMarketItems([1]):");
-  console.log(await market.getMarketItems([1]));
-  */
-
   // Run getMarketItems() using returned value from test #7
   console.log("\n9. RUNNING market.getMarketItems(forSaleItemIDs):");
   console.log("forSaleItemIDs: " + forSaleItemIDs);
   console.log(await market.getMarketItems(forSaleItemIDs));
 
-  // Run newUser() for seller2
+  // Run newUser() for seller
   console.log("\n10. RUNNING pazariMVP.newTokenListing(seller2)");
   var uri3 = "SOME_URI_HERE";
   var amount3 = 30;
   var price3 = web3.utils.toWei("14.99");
-  console.log("Create an item with amount " + amount3 + " and price $" + price3);
-  console.log("Inputs: " + uri3 + ", " + amount3 + ", " + price3);
+  console.log("Create an item with amount " + amount3 + " and price $" + web3.utils.fromWei(price3));
+  console.log("Inputs: " + uri3 + ", " + amount3 + ", " + web3.utils.fromWei(price3));
   console.log(
-    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri1, amount1, price1, { from: seller2 })),
+    "Estimating gas: " + (await pazariMVP.newTokenListing.estimateGas(uri3, amount3, price3, { from: seller2 })),
   );
-  await pazariMVP.newTokenListing(uri1, amount1, price1, { from: seller2 });
+  await pazariMVP.newTokenListing(uri3, amount3, price3, { from: seller2 });
 
   // Run newTokenListing(seller) (not seller2)
   // Need to check that tokenIDs and itemIDs increment independently and correctly
@@ -257,7 +251,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log("User contacts Pazari about missing NFT");
 
   console.log("\nCalling recoverNFT({from: pazariDev}):");
-  await pazariMVP.recoverNFT(someToken.address, 1, 1, nftOwner, { from: pazariDev });
+  await pazariMVP.recoverNFT(someToken.address, 1, 1, nftOwner, "PazariDev", { from: pazariDev });
   console.log("Checking balanceOf PazariMVP: " + (await someToken.balanceOf(pazariMVP.address, 1)));
   console.log("Checking balanceOf nftOwner: " + (await someToken.balanceOf(nftOwner, 1)));
 

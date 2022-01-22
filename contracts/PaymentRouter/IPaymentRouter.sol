@@ -257,42 +257,45 @@ interface IPaymentRouter {
    * @param _newMax Maximum recipient size for new PaymentRoutes
    * @return (bool, uint8) Success bool, new value for maxRecipients
    */
-  function setMaxRecipients(uint8 _newMax, string memory _memo) external returns (bool, uint8);
+  function setMaxRecipients(uint8 _newMax, string calldata _memo) external returns (bool, uint8);
 }
 
 /**
- * @notice These may not be needed, but they are available to use
- *
- * @dev All Pazari developer functions are not included in this interface
+ * @dev Includes all access control functions for Pazari admins and
+ * PaymentRoute management. Uses two types of admins: Pazari admins
+ * who have isAdmin, and PaymentRoute admins who have isRouteAdmin.
+ * All Pazari admins can access functions restricted to route admins,
+ * but route admins cannot access functions restricted to Pazari admins.
  */
 interface IAccessControlPR {
   /**
    * @notice Returns tx.origin for any Pazari-owned admin contracts, returns msg.sender
-   * for everything else. This only permits Pazari helper contracts to use tx.origin,
-   * and all external non-admin contracts and wallets will use msg.sender. This is
-   * essential for accurately recording owner addresses while restricting access to
-   * PaymentRouter functions.
-   * @dev Caution: This design is vulnerable to phishing attacks if a helper contract that
-   * has isAdmin does NOT run the same _msgSender() logic. Ensure that all contracts
-   * have the exact same _msgSender() function logic and that it is implemented correctly!
-   * @dev This function can be used by front-end to make sure the user isn't being tricked
-   * into using a hacker's contract to create and manage Pazari items. If this function's
-   * output matches the user's wallet address, then they are either calling from the
-   * wallet or from a Pazari helper contract (like PazariMVP). If the output does not
-   * match the wallet address, then it means there is a non-admin smart contract between
-   * them and Pazari, which is either intentional if they want to use a multi-sig contract
-   * for collaboration projects, or it's a hacker trying to trick the user into creating
-   * a profile with the hacker's contract as the owner.
+   * for everything else. This only permits Pazari helper contracts to return tx.origin,
+   * and all external non-admin contracts and wallets will return msg.sender.
+   * @dev This can be used to detect if user is being tricked into a phishing attack.
+   * If _msgSender() is different from user's wallet address, then there exists an
+   * unauthorized contract between the user and the _msgSender() function. However,
+   * there is a context when this is intentional, see next dev entry.
+   * @dev This can also be used to create multi-sig contracts that own MarketItems
+   * on behalf of multiple owners without any one of them having ownership, and
+   * without needing to specify who the owner is at item creation. In this context,
+   * _msgSender() will return the address of the multi-sig contract instead of any
+   * wallet addresses operating the contract. This feature will be essential for
+   * collaboration projects.
+   * @dev Returns tx.origin if caller is using a contract with isAdmin. PazariMVP
+   * and FactoryPazariTokenMVP require isAdmin with other contracts to function.
+   * Marketplace must have isAdmin with PaymentRouter to be able to use it, and
+   * PazariMVP must have isAdmin with Marketplace to function and will revert if
+   * it doesn't.
    */
   function _msgSender() external view returns (address callerAddress);
 
   //***PAZARI ADMINS***\\
   // Fires when Pazari admins are added/removed
-  event AdminAdded(bytes32 routeID, address addedAdmin, address callerAdmin, string memo, uint256 timestamp);
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
-    bytes32 routeID,
-    address removedAdmin,
-    address callerAdmin,
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
@@ -301,24 +304,24 @@ interface IAccessControlPR {
   function isAdmin(address _adminAddress) external view returns (bool success);
 
   // Adds an address to isAdmin mapping
-  function addAdmin(address _addedAddress, string memory _memo) external returns (bool success);
+  function addAdmin(address _addedAddress, string calldata _memo) external returns (bool success);
 
   // Removes an address from isAdmin mapping
-  function removeAdmin(address _removedAddress, string memory _memo) external returns (bool success);
+  function removeAdmin(address _removedAddress, string calldata _memo) external returns (bool success);
 
   //***PAYMENT ROUTE ADMINS (SELLERS)***\\
   // Fires when route admins are added/removed, returns _msgSender() for callerAdmin
   event RouteAdminAdded(
-    bytes32 routeID,
-    address addedAdmin,
-    address callerAdmin,
+    bytes32 indexed routeID,
+    address indexed newAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
   event RouteAdminRemoved(
-    bytes32 routeID,
-    address removedAdmin,
-    address callerAdmin,
+    bytes32 indexed routeID,
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );

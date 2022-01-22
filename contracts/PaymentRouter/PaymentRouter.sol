@@ -19,22 +19,27 @@ contract AccessControlPR {
   // Maps each routeID to its creator address
   mapping(bytes32 => address) internal routeCreator;
 
-  // Fires when Pazari admins are added/removed, uses tx.origin for callerAdmin
-  event AdminAdded(address addedAdmin, address callerAdmin, string memo, uint256 timestamp);
-  event AdminRemoved(address removedAdmin, address callerAdmin, string memo, uint256 timestamp);
+  // Fires when Pazari admins are added/removed
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
+  event AdminRemoved(
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
-  // Fires when route admins are added/removed, uses _msgSender() for callerAdmin
+  // Fires when route admins are added/removed, returns _msgSender() for callerAdmin
   event RouteAdminAdded(
-    bytes32 routeID,
-    address addedAdmin,
-    address callerAdmin,
+    bytes32 indexed routeID,
+    address indexed newAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
   event RouteAdminRemoved(
-    bytes32 routeID,
-    address removedAdmin,
-    address callerAdmin,
+    bytes32 indexed routeID,
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
     string memo,
     uint256 timestamp
   );
@@ -102,7 +107,7 @@ contract AccessControlPR {
   }
 
   // Adds an address to isAdmin mapping
-  function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function addAdmin(address _newAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(!isAdmin[_newAddress], "Address is already an admin");
 
     isAdmin[_newAddress] = true;
@@ -115,7 +120,7 @@ contract AccessControlPR {
   function addRouteAdmin(
     bytes32 _routeID,
     address _newAddress,
-    string memory _memo
+    string calldata _memo
   ) external onlyRouteAdmin(_routeID) returns (bool) {
     require(!isRouteAdmin[_routeID][_newAddress], "Address is already a route admin");
 
@@ -126,7 +131,7 @@ contract AccessControlPR {
   }
 
   // Removes an address from isAdmin mapping
-  function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function removeAdmin(address _oldAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(isAdmin[_oldAddress], "Address is not an admin");
 
     isAdmin[_oldAddress] = false;
@@ -139,7 +144,7 @@ contract AccessControlPR {
   function removeRouteAdmin(
     bytes32 _routeID,
     address _oldAddress,
-    string memory _memo
+    string calldata _memo
   ) external onlyRouteAdmin(_routeID) returns (bool) {
     require(isRouteAdmin[_routeID][_oldAddress], "Address is not a route admin");
 
@@ -631,7 +636,7 @@ contract PaymentRouter is AccessControlPR {
    *
    * @dev Emits TreasurySet event
    */
-  function setTreasuryAddress(address _newTreasuryAddress, string memory _memo)
+  function setTreasuryAddress(address _newTreasuryAddress, string calldata _memo)
     external
     onlyAdmin
     returns (
@@ -656,7 +661,7 @@ contract PaymentRouter is AccessControlPR {
    * @param _newMax Maximum recipient size for new PaymentRoutes
    * @return (bool, uint8) Success bool, new value for maxRecipients
    */
-  function setMaxRecipients(uint8 _newMax, string memory _memo) external onlyAdmin returns (bool, uint8) {
+  function setMaxRecipients(uint8 _newMax, string calldata _memo) external onlyAdmin returns (bool, uint8) {
     maxRecipients = _newMax;
 
     emit MaxRecipientsChanged(maxRecipients, _msgSender(), _memo, block.timestamp);

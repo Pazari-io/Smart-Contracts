@@ -10,15 +10,20 @@ import "../Dependencies/ERC1155Holder.sol";
 
 contract AccessControlPMVP {
   // All "owners" who can access restricted PazariToken functions
-  // This is defined inside functions
+  // Includes addresses for market, router, and factory
   address[] internal admins;
 
   // Maps admin addresses to bool
   mapping(address => bool) public isAdmin;
 
-  // Fires when admins are added or removed
-  event AdminAdded(address newAdmin, address adminAuthorized, string reason, uint256 timestamp);
-  event AdminRemoved(address oldAdmin, address adminAuthorized, string reason, uint256 timestamp);
+  // Fires when Pazari admins are added/removed
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
+  event AdminRemoved(
+    address indexed oldAdmin,
+    address indexed adminAuthorized,
+    string memo,
+    uint256 timestamp
+  );
 
   constructor(address[] memory _adminAddresses) {
     for (uint256 i = 0; i < _adminAddresses.length; i++) {
@@ -48,7 +53,7 @@ contract AccessControlPMVP {
 
   // Adds an address to isAdmin mapping
   // Requires both tx.origin and msg.sender be admins
-  function addAdmin(address _newAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function addAdmin(address _newAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(!isAdmin[_newAddress], "Address is already an admin");
 
     isAdmin[_newAddress] = true;
@@ -59,7 +64,7 @@ contract AccessControlPMVP {
 
   // Removes an address from isAdmin mapping
   // Requires both tx.origin and msg.sender be admins
-  function removeAdmin(address _oldAddress, string memory _memo) external onlyAdmin returns (bool) {
+  function removeAdmin(address _oldAddress, string calldata _memo) external onlyAdmin returns (bool) {
     require(isAdmin[_oldAddress], "Address is not an admin");
 
     isAdmin[_oldAddress] = false;
@@ -78,25 +83,53 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
 
   // Fires when a new token is listed for sale
   event NewTokenListed(
-    uint256 indexed itemID,
+    uint256 itemID,
     address indexed tokenContract,
     uint256 indexed price,
     uint256 tokenID,
     uint256 amount,
     string uri,
-    address sender
+    address indexed sender
   );
 
-  // Fires when a new user joins and lists an item
-  event NewUserCreated(address userAddress, bytes32 routeID, address tokenContractAddress, uint256 timestamp);
+  // Fires when a new user joins Pazari
+  event NewUserCreated(
+    address indexed userAddress,
+    bytes32 routeID,
+    address tokenContractAddress,
+    uint256 timestamp
+  );
 
-  // Fires after a token contract is cloned
+  /**
+   * @notice Fires when a new PazariTokenMVP contract is cloned
+   *
+   * @param contractID Unique identifier for the contract created
+   * @param contractType Number representing type of contract created (see below)
+   * @param creatorAddress Address of contract's creator
+   * @param factoryAddress Address of factory that created the contract
+   * @param cloneAddress Address of cloned token contract
+   * @param timestamp Block timestamp when contract was created
+   *
+   * @dev All ContractCloned events from PazariMVP will have contractType = 0,
+   * so it is not indexed. Instead, we can filter by contractID, creator's
+   * address, and the factory's address.
+   */
   event ContractCloned(
-    uint256 contractID,
-    uint16 indexed contractType,
-    address indexed creatorAddress,
+    uint256 indexed contractID,
+    uint16 contractType,
+    address creatorAddress,
     address indexed factoryAddress,
     address cloneAddress,
+    uint256 timestamp
+  );
+
+  // Fires when admin recovers lost NFT(s)
+  event NFTRecovered(
+    address indexed tokenContract,
+    uint256 indexed tokenID,
+    address recipient,
+    address indexed admin,
+    string memo,
     uint256 timestamp
   );
 
@@ -158,23 +191,12 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   }
 
   /**
-   * @notice Auto-generates a new payment route, clones a token contract, mints a token, and lists
-   * it on the Pazari iMarketplace in one turn. This function only needs three inputs.
+   * @notice Creates a new UserProfile struct and clones a new token contract
+   * @return address Contract address of user's token contract
    */
   function createUserProfile() private returns (address) {
-    // Require that admins completed initialization
-    require(
-      IAccessControlMP(address(iMarketplace)).isAdmin(address(this)) &&
-        IAccessControlPR(address(iPaymentRouter)).isAdmin(address(this)),
-      "Admins must finish initialization"
-    );
     // Store return value of _msgSender()
     address msgSender = _msgSender();
-
-    // Find out if msgSender is blacklisted from the Marketplace
-    require(!IAccessControlMP(address(iMarketplace)).isBlacklisted(msgSender), "Caller is blacklisted");
-    // Check that user doesn't already have a UserProfile
-    require(userProfile[msgSender].userAddress == address(0), "User already registered!");
 
     // PaymentRouter \\
     // Create singleton arrays for PaymentRouter inputs
@@ -214,11 +236,14 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
   }
 
   /**
-   * @notice Creates a new token and lists it on the Pazari Marketplace
-   * @return uint256, uint256 The tokenID and itemID of the new token listed
+   * @notice Creates a new token and lists it on the Pazari Marketplace.
+   * @dev If user does not have a profile yet, then one is created and
+   * a new token contract is cloned and deployed.
    *
-   * @dev Assumes the seller is using the same PaymentRoute and token contract
-   * created in newUser().
+   * @param _URI URL to token's public metadata
+   * @param _amount Amount of tokens to mint and list
+   * @param _price Listing price per token
+   * @return tokenID The tokenID and itemID of the new token listed
    *
    * @dev Emits NewTokenListed event
    */
@@ -292,11 +317,14 @@ contract PazariMVP is ERC1155Holder, AccessControlPMVP {
     address _nftContract,
     uint256 _tokenID,
     uint256 _amount,
-    address _to
+    address _to,
+    string calldata _memo
   ) external onlyAdmin returns (bool) {
     require(IERC1155(_nftContract).balanceOf(address(this), _tokenID) != 0, "NFT not here!");
 
     IERC1155(_nftContract).safeTransferFrom(address(this), _to, _tokenID, _amount, "");
+
+    emit NFTRecovered(_nftContract, _tokenID, _to, _msgSender(), _memo, block.timestamp);
     return true;
   }
 }
