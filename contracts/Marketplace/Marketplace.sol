@@ -82,9 +82,9 @@ contract AccessControlMP {
     }
     msgSender = address(this);
     status = notEntered;
-    errorMsgCallerNotAdmin = "Caller is not admin";
-    errorMsgAddressAlreadyAdmin = "Address is already an admin";
-    errorMsgAddressNotAdmin = "Address is not an admin";
+    errorMsgCallerNotAdmin = "Marketplace: Caller is not admin";
+    errorMsgAddressAlreadyAdmin = "Marketplace: Address is already an admin";
+    errorMsgAddressNotAdmin = "Marketplace: Address is not an admin";
   }
 
   /**
