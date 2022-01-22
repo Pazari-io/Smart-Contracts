@@ -257,7 +257,7 @@ module.exports = async function (deployer, network, accounts) {
   console.log("User contacts Pazari about missing NFT");
 
   console.log("\nCalling recoverNFT({from: pazariDev}):");
-  await pazariMVP.recoverNFT(someToken.address, 1, 1, nftOwner, { from: pazariDev });
+  await pazariMVP.recoverNFT(someToken.address, 1, 1, nftOwner, "PazariDev", { from: pazariDev });
   console.log("Checking balanceOf PazariMVP: " + (await someToken.balanceOf(pazariMVP.address, 1)));
   console.log("Checking balanceOf nftOwner: " + (await someToken.balanceOf(nftOwner, 1)));
 
