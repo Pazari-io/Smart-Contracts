@@ -22,6 +22,10 @@ contract AccessControlMP {
   // Maps itemID to the address that created it
   mapping(uint256 => address) public itemCreator;
 
+  string errorMsgCallerNotAdmin;
+  string errorMsgAddressAlreadyAdmin;
+  string errorMsgAddressNotAdmin;
+
   // Used by noReentrantCalls
   address internal msgSender;
   uint256 private constant notEntered = 1;
@@ -78,6 +82,9 @@ contract AccessControlMP {
     }
     msgSender = address(this);
     status = notEntered;
+    errorMsgCallerNotAdmin = "Caller is not admin";
+    errorMsgAddressAlreadyAdmin = "Address is already an admin";
+    errorMsgAddressNotAdmin = "Address is not an admin";
   }
 
   /**
@@ -93,7 +100,7 @@ contract AccessControlMP {
   // Adds an address to isAdmin mapping
   // Emits AdminAdded event
   function addAdmin(address _newAddress, string calldata _memo) external onlyAdmin returns (bool) {
-    require(!isAdmin[_newAddress], "Address is already an admin");
+    require(!isAdmin[_newAddress], errorMsgAddressAlreadyAdmin);
 
     isAdmin[_newAddress] = true;
 
@@ -108,8 +115,8 @@ contract AccessControlMP {
     address _newAddress,
     string calldata _memo
   ) external onlyItemAdmin(_itemID) returns (bool) {
-    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
-    require(!isItemAdmin[_itemID][_newAddress], "Address is already an item admin");
+    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], errorMsgCallerNotAdmin);
+    require(!isItemAdmin[_itemID][_newAddress], errorMsgAddressAlreadyAdmin);
 
     isItemAdmin[_itemID][_newAddress] = true;
 
@@ -120,7 +127,7 @@ contract AccessControlMP {
   // Removes an address from isAdmin mapping
   // Emits AdminRemoved event
   function removeAdmin(address _oldAddress, string calldata _memo) external onlyAdmin returns (bool) {
-    require(isAdmin[_oldAddress], "Address is not an admin");
+    require(isAdmin[_oldAddress], errorMsgAddressNotAdmin);
 
     isAdmin[_oldAddress] = false;
 
@@ -135,8 +142,8 @@ contract AccessControlMP {
     address _oldAddress,
     string calldata _memo
   ) external onlyItemAdmin(_itemID) returns (bool) {
-    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], "Caller is not admin");
-    require(isItemAdmin[_itemID][_oldAddress], "Address is not an admin");
+    require(isItemAdmin[_itemID][msg.sender] && isItemAdmin[_itemID][tx.origin], errorMsgCallerNotAdmin);
+    require(isItemAdmin[_itemID][_oldAddress], errorMsgAddressNotAdmin);
     require(itemCreator[_itemID] == _msgSender(), "Cannot remove item creator");
 
     isItemAdmin[_itemID][_oldAddress] = false;
@@ -157,7 +164,7 @@ contract AccessControlMP {
    * @dev Emits AddressWhitelisted event when _userAddress is whitelisted
    */
   function toggleBlacklist(address _userAddress, string calldata _memo) external returns (bool) {
-    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari admin");
+    require(isAdmin[msg.sender] && isAdmin[tx.origin], errorMsgCallerNotAdmin);
     require(!isAdmin[_userAddress], "Cannot blacklist admins");
 
     if (!isBlacklisted[_userAddress]) {
@@ -177,7 +184,7 @@ contract AccessControlMP {
    * eliminates phishing attacks.
    */
   modifier onlyAdmin() {
-    require(isAdmin[msg.sender] && isAdmin[tx.origin], "Only Pazari-owned addresses");
+    require(isAdmin[msg.sender] && isAdmin[tx.origin], errorMsgCallerNotAdmin);
     _;
   }
 
@@ -190,7 +197,7 @@ contract AccessControlMP {
   modifier onlyItemAdmin(uint256 _itemID) {
     require(
       itemCreator[_itemID] == _msgSender() || isItemAdmin[_itemID][_msgSender()] || isAdmin[_msgSender()],
-      "Caller is neither admin nor item creator"
+      errorMsgCallerNotAdmin
     );
     _;
   }
@@ -203,11 +210,11 @@ contract AccessControlMP {
    */
   modifier noReentrantCalls() {
     require(status == notEntered, "Reentrancy not allowed");
-    status = entered;
-    msgSender = _msgSender();
+    status = entered; // Lock function
+    msgSender = _msgSender(); // Store value of _msgSender()
     _;
-    msgSender = address(this);
-    status = notEntered;
+    msgSender = address(this); // Reset msgSender
+    status = notEntered; // Unlock function
   }
 }
 
@@ -516,7 +523,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     uint256 itemLimit = item.itemLimit;
     uint256 balance = IERC1155(item.tokenContract).balanceOf(_msgSender(), item.tokenID);
     uint256 initBuyersBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
-    uint256 initMarketBalance = IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID);
 
     // Define total cost of purchase
     uint256 totalCost = item.price * _amount;
@@ -573,14 +579,10 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Call market item's token contract and transfer token from Marketplace to buyer
     IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
-    // Check that balances updated correctly on both sides
-    assert( // Marketplace should be - _amount
+    require( // Buyer should be + _amount
       IERC1155(item.tokenContract)
-      .balanceOf(address(this), item.tokenID) == initMarketBalance - _amount
-    );
-    assert( // Buyer should be + _amount
-      IERC1155(item.tokenContract)
-      .balanceOf(msgSender, item.tokenID) == initBuyersBalance + _amount
+      .balanceOf(msgSender, item.tokenID) == initBuyersBalance + _amount,
+      "Buyer never received token"
     );
 
     emit MarketItemSold(item.itemID, _amount, msgSender);
@@ -605,7 +607,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     returns (bool)
   {
     MarketItem memory item = marketItems[_itemID - 1];
-    uint256 initBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
     uint256 initMarketBalance = IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID);
 
     /* ========== CHECKS ========== */
@@ -628,14 +629,12 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     IERC1155(item.tokenContract).safeTransferFrom(_msgSender(), address(this), item.tokenID, _amount, "");
 
     // Check that balances updated correctly on both sides
-    assert( // Marketplace should be + _amount
+    require( // Marketplace should be + _amount
       IERC1155(item.tokenContract)
-      .balanceOf(address(this), item.tokenID) == initMarketBalance + _amount
+      .balanceOf(address(this), item.tokenID) == initMarketBalance + _amount,
+      "Marketplace never received tokens"
     );
-    assert( // Marketplace should be - _amount
-      IERC1155(item.tokenContract)
-      .balanceOf(msgSender, item.tokenID) == initBalance - _amount
-    );
+
     emit ItemRestocked(_itemID, _amount);
     return true;
   }
@@ -659,7 +658,6 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
   {
     MarketItem memory item = marketItems[_itemID - 1];
     uint256 initMarketBalance = item.amount;
-    uint256 initSellerBalance = IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID);
 
     /* ========== CHECKS ========== */
     // Store initial values
@@ -679,11 +677,9 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     IERC1155(item.tokenContract).safeTransferFrom(address(this), _msgSender(), item.tokenID, _amount, "");
 
     // Check that balances updated correctly on both sides
-    assert( // Marketplace should be - _amount
-      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == initMarketBalance - _amount
-    );
-    assert( // Seller should be + _amount
-      IERC1155(item.tokenContract).balanceOf(msgSender, item.tokenID) == initSellerBalance + _amount
+    require( // Marketplace should be - _amount
+      IERC1155(item.tokenContract).balanceOf(address(this), item.tokenID) == initMarketBalance - _amount,
+      "Marketplace never lost tokens"
     );
 
     emit ItemPulled(_itemID, _amount);
@@ -804,7 +800,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     // Caller must either be item's creator or a Pazari admin, no itemAdmins allowed
     require(
       _msgSender() == itemCreator[_itemID] || isAdmin[_msgSender()],
-      "Only item creators and Pazari admins can delete items"
+      "Only item creators and Pazari admins"
     );
     // Require item has been completely unstocked and deactivated
     require(!item.forSale, "Deactivate item before deleting");
@@ -924,12 +920,13 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
       _amount = initMarketBalance - marketItemBalance;
     }
 
-    // Check that all balances updated correctly
-    assert( // Marketplace final balance should be initial - _amount
-      IERC1155(_nftContract).balanceOf(address(this), _tokenID) == initMarketBalance - _amount
-    );
-    assert( // Recipient final balance should be initial + _amount
-      IERC1155(_nftContract).balanceOf(_recipient, _tokenID) == initOwnerBalance + _amount
+    // Transfer token(s) to recipient
+    IERC1155(_nftContract).safeTransferFrom(address(this), _recipient, _tokenID, _amount, "");
+
+    // Check that recipient's balance was updated correctly
+    require( // Recipient final balance should be initial + _amount
+      IERC1155(_nftContract).balanceOf(_recipient, _tokenID) == initOwnerBalance + _amount,
+      "Recipient never received token(s)"
     );
 
     emit NFTRecovered(_nftContract, _tokenID, _recipient, msgSender, _memo, block.timestamp);
