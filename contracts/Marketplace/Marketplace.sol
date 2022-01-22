@@ -754,6 +754,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
    *
    * @dev Emits ForSaleToggled event
    */
+   /*
   function toggleForSale(uint256 _itemID)
     external
     noReentrantCalls
@@ -780,6 +781,7 @@ contract Marketplace is ERC1155Holder, AccessControlMP {
     emit ForSaleToggled(_itemID, marketItems[_itemID - 1].forSale);
     return marketItems[_itemID - 1].forSale;
   }
+  */
 
   /**
    * @notice Deletes a MarketItem, setting all its properties to default values
