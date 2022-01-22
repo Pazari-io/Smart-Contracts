@@ -260,7 +260,6 @@ interface IPaymentRouter {
   function setMaxRecipients(uint8 _newMax, string calldata _memo) external returns (bool, uint8);
 }
 
-
 /**
  * @dev Includes all access control functions for Pazari admins and
  * PaymentRoute management. Uses two types of admins: Pazari admins
@@ -279,8 +278,8 @@ interface IAccessControlPR {
    * there is a context when this is intentional, see next dev entry.
    * @dev This can also be used to create multi-sig contracts that own MarketItems
    * on behalf of multiple owners without any one of them having ownership, and
-   * without needing to specify who the owner is at item creation. In this context, 
-   * _msgSender() will return the address of the multi-sig contract instead of any 
+   * without needing to specify who the owner is at item creation. In this context,
+   * _msgSender() will return the address of the multi-sig contract instead of any
    * wallet addresses operating the contract. This feature will be essential for
    * collaboration projects.
    * @dev Returns tx.origin if caller is using a contract with isAdmin. PazariMVP
@@ -293,12 +292,7 @@ interface IAccessControlPR {
 
   //***PAZARI ADMINS***\\
   // Fires when Pazari admins are added/removed
-  event AdminAdded(
-    address indexed newAdmin, 
-    address indexed adminAuthorized, 
-    string memo, 
-    uint256 timestamp
-  );
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,

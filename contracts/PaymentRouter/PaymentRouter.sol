@@ -20,12 +20,7 @@ contract AccessControlPR {
   mapping(bytes32 => address) internal routeCreator;
 
   // Fires when Pazari admins are added/removed
-  event AdminAdded(
-    address indexed newAdmin, 
-    address indexed adminAuthorized, 
-    string memo, 
-    uint256 timestamp
-  );
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,

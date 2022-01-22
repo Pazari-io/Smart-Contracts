@@ -15,9 +15,9 @@ interface IPazariMVP {
 
   // Fires when a new user joins and lists an item
   event NewUserCreated(
-    address indexed userAddress, 
-    bytes32 routeID, 
-    address tokenContractAddress, 
+    address indexed userAddress,
+    bytes32 routeID,
+    address tokenContractAddress,
     uint256 timestamp
   );
 
@@ -46,11 +46,11 @@ interface IPazariMVP {
 
   // Fires when admin recovers lost NFT(s)
   event NFTRecovered(
-    address indexed tokenContract, 
-    uint256 indexed tokenID, 
-    address recipient, 
-    address indexed admin, 
-    string memo, 
+    address indexed tokenContract,
+    uint256 indexed tokenID,
+    address recipient,
+    address indexed admin,
+    string memo,
     uint256 timestamp
   );
 
@@ -133,15 +133,9 @@ interface IPazariMVP {
   function deployedContracts(uint256 _index) external view returns (address contractAddress);
 }
 
-
 interface IAccessControlPMVP {
   // Fires when Pazari admins are added/removed
-  event AdminAdded(
-    address indexed newAdmin, 
-    address indexed adminAuthorized, 
-    string memo, 
-    uint256 timestamp
-  );
+  event AdminAdded(address indexed newAdmin, address indexed adminAuthorized, string memo, uint256 timestamp);
   event AdminRemoved(
     address indexed oldAdmin,
     address indexed adminAuthorized,
@@ -170,5 +164,6 @@ interface IAccessControlPMVP {
    * @dev Emits AdminRemoved event when isAdmin is taken away from an address
    */
   function addAdmin(address _newAddress, string calldata _memo) external returns (bool);
+
   function removeAdmin(address _oldAddress, string calldata _memo) external returns (bool);
 }
