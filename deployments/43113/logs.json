@@ -1,26 +1,33 @@
 {
   "FactoryPazariTokenMVP": {
-    "address": "0x74Ac419C5eA983A48f966155505C37D5FdB122A5",
-    "txHash": "0x9b4f8213a4f952c8feb327bcfa1f95e8d16662d277241d4ee76c43eaeb5527f9",
+    "address": "0xF3C0498C5c1198F2e8086F8228b641C8eEe0df0a",
+    "txHash": "0x3236087967d6ff37b1e2172eae7c22f0bd8c5abb61b6a6e1d2d96480e1b72648",
     "args": []
   },
   "PaymentRouter": {
-    "address": "0x6cdb6b5E2Aae1d7449E16DEe9A13a42d5aEB944B",
-    "txHash": "0xc0eb5834c1efcc24ac8af5e0bb79c177ce3a16f17f98e19678bb431528ba8440",
+    "address": "0x2644D5e8a0AB4DDEaA711cdFc67B7bFd0355B573",
+    "txHash": "0x40f60e4517a89376af676d1cdb5ca65ce949c7fe879a36a5345d73ccaffe1d3a",
     "args": [
-      "0xfcAB999A025C5bACcD6b759e3dBd25C24A09056A",
+      "0x4e9287d6182498bF0A72cd7459edb04c0Ec0540e",
       [
-        "0xbdFF2E0e7F86f68944F2228da87ad2Ec51746889"
+        "0xbdFF2E0e7F86f68944F2228da87ad2Ec51746889",
+        "0xfcAB999A025C5bACcD6b759e3dBd25C24A09056A",
+        "0x3f6a4aCDA1B98b7fD82f07F9B3aEb38988B85b05"
       ],
       300,
       10000
     ]
   },
   "Marketplace": {
-    "address": "0x96CeE70D9F631b3c63Fc132eb04584520aAB23c3",
-    "txHash": "0xe87324903032a865c23feb04a0eb91abcaf0917ff52ca5b64c93bb3664182854",
+    "address": "0x4622ebA07F3074992e78f48df8B41983431Cc6DE",
+    "txHash": "0x15bd242494bc07af960098a61fe0608cd7762dc97549979880c500943997fa32",
     "args": [
-      "0x6cdb6b5E2Aae1d7449E16DEe9A13a42d5aEB944B"
+      "0x2644D5e8a0AB4DDEaA711cdFc67B7bFd0355B573",
+      [
+        "0xbdFF2E0e7F86f68944F2228da87ad2Ec51746889",
+        "0xfcAB999A025C5bACcD6b759e3dBd25C24A09056A",
+        "0x3f6a4aCDA1B98b7fD82f07F9B3aEb38988B85b05"
+      ]
     ]
   },
   "ERC20PresetMinterPauser": {
@@ -29,6 +36,26 @@
     "args": [
       "Magic Internet Money",
       "MIM"
+    ]
+  },
+  "MIM": {
+    "address": "0xa38A3b1bC6d6DE69F4948C9D53157db4aD790424",
+    "txHash": "0x8b179fa5f2202b592b1c62f12457dac053a91475a1dace4dc5b59f65feeaa1c5",
+    "args": []
+  },
+  "PazariMVP": {
+    "address": "0x6252e954f51BB6BaeE6e5131DDEe828429503D17",
+    "txHash": "0xe928441b3e593ff8563c6bcd46647b767544d96b3146e83a2ffd797874ae378a",
+    "args": [
+      "0xF3C0498C5c1198F2e8086F8228b641C8eEe0df0a",
+      "0x4622ebA07F3074992e78f48df8B41983431Cc6DE",
+      "0x2644D5e8a0AB4DDEaA711cdFc67B7bFd0355B573",
+      "0xa38A3b1bC6d6DE69F4948C9D53157db4aD790424",
+      [
+        "0xbdFF2E0e7F86f68944F2228da87ad2Ec51746889",
+        "0xfcAB999A025C5bACcD6b759e3dBd25C24A09056A",
+        "0x3f6a4aCDA1B98b7fD82f07F9B3aEb38988B85b05"
+      ]
     ]
   }
 }
