@@ -1,9 +1,9 @@
 import {
-  ERC20PresetMinterPauser__factory,
-  FactoryPazariTokenMVP__factory,
   Marketplace__factory,
   PaymentRouter__factory,
-  PazariTokenMVP__factory,
+  PazariMVP__factory,
+  FactoryPazariTokenMVP__factory,
+  MIM__factory,
 } from "../types";
 import { MacroChain } from "../utils";
 
@@ -12,31 +12,40 @@ const main = async () => {
 
   //Setup accounts
   const deployer = users[0];
-  const treasury = users[1];
-  const seller = users[2];
+  const cryptoPhonix = users[1];
+  const rego350 = users[2];
+  const treasury = users[9];
 
   //Deploy PaymentRouter
-  const devs = [deployer.address];
+  const admins = [deployer.address, cryptoPhonix.address, rego350.address];
   const minTax = 300;
   const maxTax = 10000;
   const pr = await deploy(PaymentRouter__factory, {
-    args: [treasury.address, devs, minTax, maxTax],
+    args: [treasury.address, admins, minTax, maxTax],
   });
 
   //Deploy Marketplace
   const mp = await deploy(Marketplace__factory, {
-    args: [pr.address],
+    args: [pr.address, admins],
   });
 
   //Deploy Mock Stablecoin
-  const mim = await deploy(ERC20PresetMinterPauser__factory, {
-    args: ["Magic Internet Money", "MIM"],
-  });
+  const mim = await deploy(MIM__factory);
 
-  //Deploy factory contract
+  //Deploy pazari token factory contract
   const factory = await deploy(FactoryPazariTokenMVP__factory);
 
+  //Deploy pazari mvp
+  const pazariMvp = await deploy(PazariMVP__factory, {
+    args: [factory.address, mp.address, pr.address, mim.address, admins],
+  });
+
   await verifyDeployedContracts();
+
+  //Add pazari mvp as admin for mp and pr
+  const memo = "Added pazari mvp as admin";
+  await mp.connect(cryptoPhonix).addAdmin(pazariMvp.address, memo);
+  await pr.connect(cryptoPhonix).addAdmin(pazariMvp.address, memo);
 };
 
 main()
