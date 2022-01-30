@@ -117,15 +117,15 @@ Pazari MVP tracks how many contracts have been deployed through it, and produces
 
 ## Pazari contract visualized
 
-![Access Control](./screenshots/Diagram_1_-_Access_Control.jpg)
+![Access Control](./screenshots/access_control_dark.jpg)
 
-![Control Flow newTokenListing](./screenshots/Diagram_2_-_Control_Flow_newTokenListing.jpg)
+![Control Flow msgSender](./screenshots/control_flow_msgSender_dark.jpg)
 
-![Control Flow buyMarketItem](./screenshots/Diagram_3_-_Control_Flow_buyMarketItem.jpg)
+![Control Flow buyMarketItem](./screenshots/control_flow_newTokenListing_dark.jpg)
 
-![Control Flow newTokenListing](./screenshots/Diagram_4_-_Control_Flow_newTokenListing.jpg)
+![Control Flow newTokenListing](./screenshots/control_flow_buyMarketItem_dark.jpg)
 
-![Full Control Flow](./screenshots/Diagram_4_-_Full_Control_Flow.jpg)
+![Full Control Flow](./screenshots/full_control_flow_dark.jpg)
 
 ## Version
 
